@@ -1,0 +1,393 @@
+#!/usr/bin/env python
+# pymips.py
+import re
+import io
+import ctypes
+import struct
+import pickle
+import argparse
+from sys import stdin
+from sys import stdout
+from sys import stderr
+
+# MIPS Simulator: this program implements a simple MIPS simulator that
+# both assembles and executes MIPS instructions. The simulator
+# implements only a small subset of the MIPS architecture, documented
+# here:
+#
+# Directives: the following directives serve as meta-instructions for
+# the assembler
+#
+#  .text - begin code section
+#  .data - begin data section
+#  .globl <symbol> - define global symbol at location
+#  .byte <value> [, <value>, ...]   - define byte in data section
+#  .half <value> [, <value>, ...]   - define half-word in data section
+#  .word <value> [, <value>, ...]   - define word in data section
+#  .ascii <value>                   - define ascii string in data section
+#  .asciiz <value>                  - define zero-terminated ascii
+#                                     string in data section
+#  .space <amount>                  - allocate bytes in data section
+#
+# Labels: labels are resolved to runtime addresses in the program's
+# text/data segments; they have the following form:
+#
+#  <label>:
+#   where label is any combination of [a-zA-Z0-9_$]
+#
+# Instructions: the simulator implements a subset of the complete MIPS
+# instruction set (mainly arithmetic, logic and load/store);
+# the simulator doesn't conceptualize puesdo-instructions, instead
+# making them the same as normal instructions
+#
+#  add   $d, $s, $t  | $d = $s + $t               | add registers, signed
+#  addu  $d, $s, $t  | $d = $s + $t               | add registers, unsigned
+#  addi  $d, $s, i   | $d = $s + SE(i)            | add immediate, signed
+#  addiu $d, $s, i   | $d = $s + SE(i)            | add immediate, unsigned
+#  and   $d, $s, $t  | $d = $s & $t               | bit-and
+#  and   $d, $s, i   | $d = $s & ZE(i)            | bit-and immediate
+#  div   $s, $t      | hi = $s % $t, lo = $s / $t | division, signed
+#  divu  $s, $t      | hi = $s % $t, lo = $s / $t | division, unsigned
+#  mult  $s, $t      | hi:lo = $s*$t              | multiplication, signed
+#  multu $s, $t      | hi:lo = $s*$t              | multiplication, unsigned
+#  nor   $d, $s, $t  | $d = ~($s | $t)            | bit-not-or
+#  or    $d, $s, $t  | $d = $s | $t               | bit-or
+#  ori   $d, $s, i   | $d = $s | ZE(i)            | bit-or, immediate
+#  sll   $d, $s, a   | $d = $s << a               | left-shift (by variable or constant)
+#  sllv  $d, $s, $t  | $d = $s << $t              | same as 'sll'
+#  sra   $d, $s, a   | $d = $s >> a  with sign-ex | arithmetic right-shift (by variable or constant)
+#  srav  $d, $s, $t  | $d = $s >> $t with sign-ex | same as sra
+#  srl   $d, $s, a   | $d = $s >> a               | arithmetic right-shift (by variable or constant)
+#  srlv  $d, $s, $t  | $d = $s >> $t              | same as srl
+#  sub   $d, $s, $t  | $d = $s - $t               | subtraction, signed
+#  subu  $d, $s, $t  | $d = $s - $t               | subtraction, unsigned
+#  xor   $d, $s, $t  | $d = $s ^ $t               | bit-xor
+#  xori  $d, $s, i   | $d = $s ^ ZE(i)            | bit-xor immediate
+#
+#  slt   $d, $s, $t  | $d = $s < $t               | set if less than signed
+#  sltu  $d, $s, $t  | $d = $s < $t               | set if less than unsigned
+#  slti  $d, $s, i   | $d = $s < SE(i)            | set if less than signed immediate
+#  sltiu $d, $s, i   | $d = $s < SE(i)            | set if less than signed immediate
+#
+#  beq   $s, $t, lbl | if $s==$t goto lbl         | branch equal
+#  bgtz  $s, lbl     | if $s > 0 goto lbl         | branch greater-than zero
+#  blez  $s, lbl     | if $s <= 0 goto lbl        | branch less-than-or-equal-to zero
+#  bne   $s, $t,lbl  | if $s!=$t goto lbl         | branch not-equal
+#
+#  j     lbl         | goto lbl                   | unconditional jump
+#  jal   lbl         | $ra = addr and jump        | jump-and-link
+#  jalr  $s          | $ra = addr and jump to $s  | jump-and-link (address in register)
+#  jr    $s          | jump to $s                 | jump to address in register
+#
+#  la    $t, addr    | $t = addr                  | load literal address
+#  lhi   $t, i       | HI($t) = i                 | load high half-word immediate
+#  li    $t, i       | $t = i                     | load word immediate
+#  llo   $t, i       | LO($t) = i                 | load low half-word immediate
+#  lb    $t, i($s)   | $t = SE(MEM[$s+i]:1)       | load byte signed
+#  lbu   $t, i($s)   | $t = ZE(MEM[$s+i]:1)       | load byte unsigned
+#  lh    $t, i($s)   | $t = SE(MEM[$s+i]:2)       | load half-word signed
+#  lhu   $t, i($s)   | $t = ZE(MEM[$s+i]:2)       | load half-word unsigned
+#  lw    $t, i($s)   | $t = MEM[$s+i]:4           | load word
+#  mfhi  $d          | $d = hi                    | move hi-register value
+#  mflo  $d          | $d = lo                    | move lo-register value
+#  move  $d, $t      | $d = $t                    | copy register to another
+#  mthi  $d          | hi = $d                    | set hi-register value
+#  mtlo  $d          | lo = $d                    | set lo-register value
+#  sb    $t, i($s)   | MEM[$s+i]:1 = LB($t)       | store byte
+#  sh    $t, i($s)   | MEM[$s+i]:2 = LB($t)       | store half-word
+#  sw    $t, i($s)   | MEM[$s+i]:4 = LB($t)       | store word
+#
+#  syscall           |                            | initiate system routine
+#
+
+# define useful constant information for the program
+STACK_SPACE = 8192
+MIPS_INSTRUCTIONS = {'add':'','addu':'','addi':'','addiu':'','and':'','and':'',
+                     'div':'','divu':'','mult':'','multu':'','nor':'','or':'',
+                     'ori':'','sll':'','sllv':'','sra':'','srav':'','srl':'',
+                     'srlv':'','sub':'','subu':'','xor':'','xori':'','slt':'',
+                     'sltu':'','slti':'','sltiu':'','beq':'','bgtz':'','blez':'',
+                     'bne':'','j':'','jal':'','jalr':'','jr':'','la':'','lhi':'',
+                     'li':'','llo':'','lb':'','lbu':'','lh':'','lhu':'','lw':'',
+                     'mfhi':'','mflo':'','move':'','mthi':'','mtlo':'','sb':'',
+                     'sh':'','sw':'','syscall':''}
+MIPS_REGISTERS = {'$0' : 0, '$zero' : 0, '$r0' : 0,
+                  '$1' : 4,'$at' : 4, '$2' : 8, '$v0' : 8,
+                  '$3' : 12,'$v1' : 12, '$4' : 16, '$a0' : 16,
+                  '$5' : 20,'$a1' : 20, '$6' : 24, '$a2' : 24,
+                  '$7' : 28,'$a3' : 28, '$8' : 32, '$t0' : 32,
+                  '$9' : 36,'$t1' : 36, '$10' : 40, '$t2' : 40,
+                  '$11' : 44,'$t3' : 44, '$12' : 48, '$t4' : 48,
+                  '$13' : 52,'$t5' : 52, '$14' : 56, '$t6' : 56,
+                  '$15' : 60,'$t7' : 60, '$16' : 64, '$s0' : 64,
+                  '$17' : 68, '$s1' : 68, '$18' : 72, '$s2' : 72,
+                  '$19' : 76, '$s3' : 76, '$20' : 80, '$s4' : 80,
+                  '$21' : 84, '$s5' : 84, '$22' : 88, '$s6' : 88,
+                  '$23' : 92, '$s7' : 92, '$24' : 96, '$t8' : 96,
+                  '$25' : 100, '$t9' : 100, '$26' : 104, '$k0' : 104,
+                  '$27' : 108, '$k1' : 108, '$28' : 112, '$gp' : 112,
+                  '$29' : 116, '$sp' : 116, '$30' : 120, '$s8' : 120,
+                  '$31' : 124, '$ra' : 124}
+STRING_ESCAPES = ((r'\\a','\x07'),(r'\\b','\x08'),(r'\\f','\x0c'),(r'\\n','\x0a'),
+                  (r'\\r','\x0d'),(r'\\t','\x09'),(r'\\v','\x0b'),(r'\\\\',r'\x5c'),
+                  (r'\\\'','\x27'),(r'\\"','\x22'),(r'\\([0-7]{3})',lambda x:chr(int(x.group(1),8))),
+                  (r'\\([0-9a-f]{2})',lambda x:chr(int(x.group(1),16))))
+
+# error reporting helper function
+def error_on_line(msg,line):
+    stderr.write("pymips: error: line {0}: {1}\n".format(line,msg))
+    exit(1)
+
+class MIPSSimulator:
+    def __init__(self,f):
+        # load information from pickle file; this consists of the
+        # program's text instructions and its data segment memory
+        t = pickle.load(f)
+        self.instr = t[0]
+        self.memory = io.BytesIO(t[1]) # main memory
+        datalen = self.memory.seek(0,2) # calculate number of bytes in data segment
+        self.memory.seek(0)
+
+        # allocate registers as a memory stream; each register has a
+        # constant offset into this memory
+        self.regmem = io.BytesIO()
+
+        # position the stack pointer register at the top of the main
+        # memory stream
+        self.maxaddr = STACK_SPACE + datalen
+        self.write_register('$sp',self.maxaddr)
+
+    def write_register(self,reg,value):
+        # each register is a 4-byte word; value should be a Python
+        # 'long/int' that we wrap into a word and write to the memory
+        # stream
+        self.regmem.seek(MIPS_REGISTERS[reg])
+        self.regmem.write(struct.pack('i',ctypes.c_uint32(value).value))
+
+    def read_register(self,reg):
+        # read a 4-byte value from the register memory stream; the
+        # result should be a Python 'long/int'
+        self.regmem.seek(MIPS_REGISTERS[reg])
+        return struct.unpack('i',self.regmem.read(4))
+
+    def simulation(self):
+        # run the simulation
+
+        pass
+
+class MIPSParser:
+    REGEX_DIRECTIVE = re.compile('(?:\s*#.*\n)*\s*\.([a-z]+)')
+    REGEX_LABEL = re.compile('(?:\s*#.*\n)*\s*([a-zA-Z0-9_$]+):')
+    REGEX_ANY = re.compile('(?:\s*#.*\n)*\s*([^#\n]+[^#\s])?\s*')
+    REGEXES = [(REGEX_DIRECTIVE,'directive'),(REGEX_LABEL,'label'),(REGEX_ANY,'any')]
+
+    def __init__(self,f):
+        self.content = f.read().replace("\r","")
+        self.globl = []   # store global symbol details
+        self.data = []    # store data segment details
+        self.instr = []   # store instruction details
+
+        # try to split the assembly code into directives, labels and
+        # everything else
+        pos = 0
+        line = 1
+        things = []
+        while pos < len(self.content):
+            for regex, kind in MIPSParser.REGEXES:
+                m = regex.match(self.content,pos)
+                if m:
+                    break
+            if m is None:
+                error_on_line("bad input: '{0}'".format(self.content[pos:]),
+                              line)
+            lno = -1
+            while pos < m.end(0):
+                if self.content[pos] == "\n":
+                    line += 1
+                if pos == m.start(1):
+                    lno = line
+                pos += 1
+            if m.group(1) is not None:
+                things.append((m.group(1),kind,lno))
+        self.preprocess(things)
+
+    def preprocess(self,things):
+        # go through the things we just parsed; assign them meaning
+        # within the context of the program; labels are resolved to
+        # addresses at a later stage
+        mode = state = label = ''
+        for content, kind, line in things:
+            if kind == 'directive':
+                if content == 'text':
+                    mode = 'text'
+                elif content == 'data':
+                    mode = 'data'
+                    state = ''
+                elif content == 'globl':
+                    state = 'globl'
+                elif content in ['byte','half','word','ascii','asciiz','space']:
+                    state = content
+                else:
+                    error_on_line("directive '{0}' is not recognized".format(content))
+            elif kind == 'label':
+                label = content
+            elif kind == 'any':
+                if mode == 'data':
+                    if state in ['byte','half','word']:
+                        # parse a list of comma separated integers and
+                        # assign a data entry
+                        try:
+                            self.data.append((state,map(int,content.split(' ,')),label,line))
+                        except ValueError:
+                            error_on_line("'{0}' directive requires integer argument".format(state),line)
+                    elif state in ['ascii','asciiz']:
+                        # this data directive only allows a single entry
+                        # to be specified (unlike byte and word); we do
+                        # have to unpack the double-quoted string
+                        if len(content) < 2 or content[0] != '"' or content[len(content)-1] != '"':
+                            error_on_line("'{0}' directive requires character string argument".format(state),line)
+                        self.data.append((state,(content[1:len(content)-1],),label,line))
+                    elif state == 'space':
+                        try:
+                            self.data.append((state,int(content),label,line))
+                        except ValueError:
+                            error_on_line("'space' directive requires integer allocation amount argument",line)
+                    else:
+                        error_on_line("cannot understand {0}".format(content),line)
+                elif mode == 'text':
+                    if state != '':
+                        if state == 'globl':
+                            # add the content entry to the list of global
+                            # symbols to mark a label as global
+                            self.globl.append((content,line))
+                        else:
+                            error_on_line("directive '{0}' must be found in data segment".format(state),line)
+                    else:
+                        # then 'content' is an instruction; instructions
+                        # are split by whitespace and commas
+                        self.instr.append((re.split('[,\s]+',content),label,line))
+                else:
+                    error_on_line("cannot understand '{0}'".format(content),line)
+
+                # reset label and state
+                label = state = ''
+
+    def __repr__(self):
+        return "{0}\n{1}\n{2}\n".format(str(self.globl),
+                                        str(self.data),
+                                        str(self.instr))
+
+    def build_program(self,outfile):
+        # build the program based on the information the parser has
+        # gathered; we pretty much leave instructions as they are
+        # (performing no processing on them); we do however resolve
+        # symbol labels into addresses (i.e. offsets) within the
+        # different data sections
+
+        # define a table of symbols that maps to their final address
+        # within the program
+        labels = {}
+
+        # represent the memory segments of the program (data and
+        # stack) using a binary stream; we don't use an actual text
+        # segment since we emulate the machine at a very high level
+        memory = io.BytesIO()
+
+        # create list of tuples of instructions
+        instructions = []
+
+        # write all data entries to the memorystream; add labels to
+        # the 'labels' table; the stack will be allocated at runtime
+        # after the data segment
+        addr = 0
+        for kind, things, label, line in self.data:
+            if label != '':
+                if label in labels:
+                    error_on_line("label '{0}' is already in use".format(label),line)
+                labels[label] = addr
+
+            for thing in things:
+                if kind == 'byte':
+                    bs = struct.pack("b",thing)
+                elif kind == 'half':
+                    bs = struct.pack("h",thing)
+                elif kind == 'word':
+                    bs = struct.pack("i",thing)
+                elif kind == 'ascii':
+                    # this kind has no zero byte terminator
+                    s = MIPSParser.eval_string_literal(thing)
+                    bs = struct.pack("{0}s".format(len(s)),s)
+                elif kind == 'asciiz':
+                    # 'struct.pack' will pad a zero when size exceeds
+                    # length of string
+                    s = MIPSParser.eval_string_literal(thing)
+                    bs = struct.pack("{0}s".format(len(s)+1),s)
+                elif kind == 'space':
+                    # fill in space with zero bytes
+                    bs = struct.pack("{0}b".format(thing),0)
+                addr += memory.write(bs)
+        memory.seek(0)
+
+        # go through all instructions and add the appropriate label to
+        # the 'labels' table which should map to the index of the
+        # instruction; if the label already exists then fail
+        offset = 0
+        for _, label, line in self.instr:
+            if label != '':
+                if label in labels:
+                    error_on_line("label '{0}' is already in use".format(label),line)
+                labels[label] = offset
+            offset += 1
+
+        # for each instruction, convert to a tuple and resolve any
+        # labels to a numeric address value; also check to make sure
+        # the instruction is real and having the correct number and
+        # type of arguments
+        for instrs, _, line in self.instr:
+            i = 0
+            for i in xrange(len(instrs)):
+                if instrs[i] in labels:
+                    instrs[i] = labels[instrs[i]]
+            MIPSParser.check_instr(instrs,line)
+            instructions.append(instrs)
+        instructions = tuple(instructions)
+
+        # save tuple of the program information to a pickle file
+        pickle.dump((instructions,memory.read()),outfile,pickle.HIGHEST_PROTOCOL)
+
+    @staticmethod
+    def check_instr(parts,line):
+        # check that the instruction exists and is well-formed
+        if not parts[0] in MIPS_INSTRUCTIONS:
+            error_on_line("'{0}' is not a valid instruction".format(parts[0]),line)
+
+    @staticmethod
+    def eval_string_literal(literal):
+        # replace string literals with their escape sequences
+        # evaluated; we use C-style escape sequences
+        for pat, rep in STRING_ESCAPES:
+            literal = re.sub(pat,rep,literal)
+        return literal
+
+def execmips(asmfile):
+    pass
+
+def assemblemips(asmfile):
+    global args
+    parser = MIPSParser(asmfile)
+    with open(args.outputFile,'w') as of:
+        parser.build_program(of)
+
+# create argument parser for simulator and parse command-line
+# arguments
+argp = argparse.ArgumentParser(description="A simple MIPS simulator")
+argp.add_argument('-a','--assemble',dest='action',action="store_const",default=execmips,
+                  const=assemblemips,help="assemble the specified assembly code")
+argp.add_argument('filename',default=None,nargs='?',metavar='file',
+                  help="input file for process (defaults to stdin if omitted)")
+argp.add_argument('-o','--output-file',dest='outputFile',default='a.mips',nargs='?',
+                  help="output file to write assembled program")
+args = argp.parse_args()
+
+with stdin if args.filename is None else open(args.filename,'r') as f:
+    args.action(f)
