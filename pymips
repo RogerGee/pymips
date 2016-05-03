@@ -102,9 +102,11 @@ from sys import stderr
 
 # error reporting helper function
 def runtime_error(msg):
+    stdout.flush()
     stderr.write("pymips: error: {}\n".format(msg))
     exit(1)
 def error_on_line(msg,line):
+    stdout.flush()
     stderr.write("pymips: error: line {0}: {1}\n".format(line,msg))
     exit(1)
 
@@ -113,18 +115,69 @@ def error_on_line(msg,line):
 # checks to make sure 'parts' is formatted correctly
 
 def check_register_instr(parts):
-    if not parts[0] in MIPS_REGISTERS or not parts[1] in MIPS_REGISTERS \
+    # <REG> <REG> <REG>
+    if len(parts) != 3 or not parts[0] in MIPS_REGISTERS or not parts[1] in MIPS_REGISTERS \
        or not parts[2] in MIPS_REGISTERS:
         return False
     return True
 
 REGEX_IMMED = re.compile('-?[0-9]+') # immediate must be an integer
 def check_immed_instr(parts):
-    if len(parts) < 4 or not parts[1] in MIPS_REGISTERS or not parts[2] in MIPS_REGISTERS \
-       or not REGEX_IMMED.match(parts[3]):
+    # <REG> <REG> <IMMED>
+    if len(parts) != 3 or not parts[0] in MIPS_REGISTERS or not parts[1] in MIPS_REGISTERS \
+       or not REGEX_IMMED.match(parts[2]):
         return False
-    # convert immediate value to integer
-    parts[3] = int(parts[3])
+    # convert immediate string to integer
+    parts[2] = int(parts[2])
+    return True
+
+def check_lbl_instr(parts):
+    # <REG> <LITERAL>
+    # literal may already be converted
+    if len(parts) != 2 or not parts[0] in MIPS_REGISTERS or \
+       (not isinstance(parts[1],(int,long)) and not REGEX_IMMED.match(parts[1])):
+        return False
+    # convert immediate string to integer
+    parts[1] = int(parts[1])
+    return True
+
+def check_lbl_instr2(parts):
+    # <REG> <REG> <LITERAL>
+    # the literal may already be converted
+    if len(parts) != 3 or not parts[0] in MIPS_REGISTERS or \
+       not parts[1] in MIPS_REGISTERS or \
+       (not isinstance(parts[2],(int,long)) and not REGEX_IMMED.match(parts[2])):
+        return False
+    # convert immediate string to integer
+    parts[2] = int(parts[2])
+    return True
+
+def check_jump_instr(parts):
+    # <IMMED>
+    # the immediate may already be converted
+    if len(parts) != 1 or (not isinstance(parts[0],(int,long)) \
+                           and not REGEX_IMMED.match(parts[0])):
+        return False
+    # convert immediate string to integer
+    parts[0] = int(parts[0])
+    return True
+
+def check_jumpreg_instr(parts):
+    # <REG>
+    return not (len(parts) != 1 or not parts[0] in MIPS_REGISTERS)
+
+REGEX_INDIR = re.compile('(-?[0-9]+)?\((.+)\)')
+def check_indirect_instr(parts):
+    # check indirect addressing instruction format
+    # <REG> <[offset](REG)>
+    if len(parts) != 2 or not parts[0] in MIPS_REGISTERS:
+        return False
+    m = REGEX_INDIR.match(parts[1])
+    if not m or not m.group(2) in MIPS_REGISTERS:
+        return False
+    # convert last part to offset; add new part for source register
+    parts[1] = 0 if m.group(1) is None else int(m.group(1))
+    parts.append(m.group(2))
     return True
 
 def instr_add(sim,parts):
@@ -201,20 +254,20 @@ def instr_nor(sim,parts):
         return check_register_instr(parts)
     t = sim.read_register(parts[1])
     u = sim.read_register(parts[2])
-    sim.write_register(parts[0],ctypes.c_uint32(~(t | u)))
+    sim.write_register(parts[0],ctypes.c_uint32(~(t | u)).value)
 
 def instr_or(sim,parts):
     if sim is None:
         return check_register_instr(parts)
     t = sim.read_register(parts[1])
     u = sim.read_register(parts[2])
-    sim.write_register(parts[0],ctypes.c_uint32(t | u))
+    sim.write_register(parts[0],ctypes.c_uint32(t | u).value)
 
 def instr_ori(sim,parts):
     if sim is None:
         return check_immed_instr(parts)
     t = sim.read_register(parts[1])
-    sim.write_register(parts[0],ctypes.c_uint32(t | parts[2]))
+    sim.write_register(parts[0],ctypes.c_uint32(t | parts[2]).value)
 
 def instr_sll(sim,parts):
     if sim is None:
@@ -224,14 +277,14 @@ def instr_sll(sim,parts):
     # sure)
     t = sim.read_register(parts[1])
     u = sim.read_register(parts[2]) if parts[2] in MIPS_REGISTERS else parts[2]
-    sim.write_register(parts[0],ctypes.c_uint32(t << u))
+    sim.write_register(parts[0],ctypes.c_uint32(t << u).value)
 
 def instr_sllv(sim,parts):
     if sim is None:
         return check_register_instr(parts)
     t = sim.read_register(parts[1])
     u = sim.read_register(parts[2])
-    sim.write_register(parts[0],ctypes.c_uint32(t << u))
+    sim.write_register(parts[0],ctypes.c_uint32(t << u).value)
 
 def instr_sra(sim,parts):
     if sim is None:
@@ -245,7 +298,7 @@ def instr_sra(sim,parts):
     # sign bit; we do this by bit-and'ing the complement of either all
     # ones or all zeros having been shifted by the same amount
     b = -1 if t & 0x80000000 else 0
-    sim.write_register(parts[0],ctypes.c_uint32((t >> u) & ~(b >> u)))
+    sim.write_register(parts[0],ctypes.c_uint32((t >> u) & ~(b >> u)).value)
 
 def instr_srav(sim,parts):
     if sim is None:
@@ -253,7 +306,7 @@ def instr_srav(sim,parts):
     t = sim.read_register(parts[1])
     u = sim.read_register(parts[2])
     b = -1 if t & 0x80000000 else 0
-    sim.write_register(parts[0],ctypes.c_uint32((t >> u) & ~(b >> u)))
+    sim.write_register(parts[0],ctypes.c_uint32((t >> u) & ~(b >> u)).value)
 
 def instr_srl(sim,parts):
     if sim is None:
@@ -263,54 +316,259 @@ def instr_srl(sim,parts):
     # sure)
     t = sim.read_register(parts[1])
     u = sim.read_register(parts[2]) if parts[2] in MIPS_REGISTERS else parts[2]
-    sim.write_register(parts[0],ctypes.c_uint32(t >> u))
+    sim.write_register(parts[0],ctypes.c_uint32(t >> u).value)
 
 def instr_srlv(sim,parts):
     if sim is None:
         return check_register_instr(parts)
     t = sim.read_register(parts[1])
     u = sim.read_register(parts[2])
-    sim.write_register(parts[0],ctypes.c_uint32(t >> u))
+    sim.write_register(parts[0],ctypes.c_uint32(t >> u).value)
 
 def instr_sub(sim,parts):
     if sim is None:
         return check_register_instr(parts)
     t = sim.read_register(parts[1])
     u = sim.read_register(parts[2])
-    sim.write_register(parts[0],ctypes.c_int32(t - u))
+    sim.write_register(parts[0],ctypes.c_int32(t - u).value)
 
 def instr_subu(sim,parts):
     if sim is None:
         return check_register_instr(parts)
     t = sim.read_register(parts[1])
     u = sim.read_register(parts[2])
-    sim.write_register(parts[0],ctypes.c_uint32(t - u))
+    sim.write_register(parts[0],ctypes.c_uint32(t - u).value)
 
 def instr_xor(sim,parts):
     if sim is None:
         return check_register_instr(parts)
     t = sim.read_register(parts[1])
     u = sim.read_register(parts[2])
-    sim.write_register(parts[0],ctypes.c_uint32(t ^ u))
+    sim.write_register(parts[0],ctypes.c_uint32(t ^ u).value)
 
 def instr_xori(sim,parts):
     if sim is None:
         return check_immed_instr(parts)
     t = sim.read_register(parts[1])
     u = sim.read_register(parts[2])
-    sim.write_register(parts[0],ctypes.c_uint32(t ^ u))
+    sim.write_register(parts[0],ctypes.c_uint32(t ^ u).value)
 
 def instr_slt(sim,parts):
-    pass
+    if sim is None:
+        return check_register_instr(parts)
+    t = ctypes.c_int32(sim.read_register(parts[1])).value
+    u = ctypes.c_int32(sim.read_register(parts[2])).value
+    sim.write_register(parts[0],int(t < u))
 
 def instr_sltu(sim,parts):
-    pass
+    if sim is None:
+        return check_register_instr(parts)
+    t = ctypes.c_uint32(sim.read_register(parts[1])).value
+    u = ctypes.c_uint32(sim.read_register(parts[2])).value
+    sim.write_register(parts[0],int(t < u))
 
 def instr_slti(sim,parts):
-    pass
+    if sim is None:
+        return check_immed_instr(parts)
+    t = ctypes.c_int32(sim.read_register(parts[1])).value
+    u = ctypes.c_int32(parts[2]).value
+    sim.write_register(parts[0],int(t < u))
 
 def instr_sltiu(sim,parts):
-    pass
+    if sim is None:
+        return check_immed_instr(parts)
+    t = ctypes.c_uint32(sim.read_register(parts[1])).value
+    u = ctypes.c_uint32(parts[2]).value
+    sim.write_register(parts[0],int(t < u))
+
+def instr_beq(sim,parts):
+    if sim is None:
+        return check_lbl_instr2(parts)
+    t = ctypes.c_int32(sim.read_register(parts[0])).value
+    u = ctypes.c_int32(sim.read_register(parts[1])).value
+    if t == u:
+        sim.progCounter = parts[2]
+
+def instr_bgtz(sim,parts):
+    if sim is None:
+        return check_lbl_instr(parts)
+    t = ctypes.c_int32(sim.read_register(parts[0])).value
+    if t > 0:
+        sim.progCounter = parts[1]
+
+def instr_blez(sim,parts):
+    if sim is None:
+        return check_lbl_instr(parts)
+    t = ctypes.c_int32(sim.read_register(parts[0])).value
+    if t <= 0:
+        sim.progCounter = parts[1]
+
+def instr_bne(sim,parts):
+    if sim is None:
+        return check_lbl_instr2(parts)
+    t = ctypes.c_int32(sim.read_register(parts[0])).value
+    u = ctypes.c_int32(sim.read_register(parts[1])).value
+    if t != u:
+        sim.progCounter = parts[2]
+
+def instr_j(sim,parts):
+    if sim is None:
+        return check_jump_instr(parts)
+    sim.progCounter = parts[0]
+
+def instr_jal(sim,parts):
+    if sim is None:
+        return check_jump_instr(parts)
+    sim.write_register('$ra',sim.progCounter) # link
+    sim.progCounter = parts[0]
+
+def instr_jalr(sim,parts):
+    if sim is None:
+        return check_jumpreg_instr(parts)
+    sim.write_register('$ra',sim.progCounter) # link
+    sim.progCounter = sim.read_register(parts[0])
+
+def instr_jr(sim,parts):
+    if sim is None:
+        return check_jumpreg_instr(parts)
+    sim.progCounter = sim.read_register(parts[0])
+
+def instr_la(sim,parts):
+    if sim is None:
+        return check_lbl_instr(parts)
+    sim.write_register(parts[0],parts[1])
+
+def instr_lhi(sim,parts):
+    if sim is None:
+        return check_lbl_instr(parts)
+    # grab current register value and place in upper word
+    t = (sim.read_register(parts[0]) & 0xffff) | (parts[1] << 16)
+    sim.write_register(parts[0],t)
+
+def instr_li(sim,parts):
+    return instr_la(sim,parts)
+
+def instr_llo(sim,parts):
+    if sim is None:
+        return check_lbl_instr(parts)
+    # grab current register value and place in upper word
+    t = (sim.read_register(parts[0]) & 0xffff0000) | (parts[1] << 16)
+    sim.write_register(parts[0],t)
+
+def instr_lb(sim,parts):
+    if sim is None:
+        return check_indirect_instr(parts)
+    addr = parts[1] + sim.read_register(parts[2])
+    sim.write_register(parts[0],sim.read_byte(addr))
+
+def instr_lbu(sim,parts):
+    if sim is None:
+        return check_indirect_instr(parts)
+    addr = parts[1] + sim.read_register(parts[2])
+    sim.write_register(parts[0],ctypes.c_uint32(sim.read_byte(addr)).value)
+
+def instr_lh(sim,parts):
+    if sim is None:
+        return check_indirect_instr(parts)
+    addr = parts[1] + sim.read_register(parts[2])
+    sim.write_register(parts[0],sim.read_halfword(addr))
+
+def instr_lhu(sim,parts):
+    if sim is None:
+        return check_indirect_instr(parts)
+    addr = parts[1] + sim.read_register(parts[2])
+    sim.write_register(parts[0],ctypes.c_uint32(sim.read_halfword(addr)).value)
+
+def instr_lw(sim,parts):
+    if sim is None:
+        return check_indirect_instr(parts)
+    addr = parts[1] + sim.read_register(parts[2])
+    sim.write_register(parts[0],sim.read_word(addr))
+
+def instr_mfhi(sim,parts):
+    if sim is None:
+        return check_jumpreg_instr(parts)
+    t = sim.read_register('HI')
+    sim.write_register(parts[0],t)
+
+def instr_mflo(sim,parts):
+    if sim is None:
+        return check_jumpreg_instr(parts)
+    t = sim.read_register('LO')
+    sim.write_register(parts[0],t)
+
+def instr_move(sim,parts):
+    if sim is None:
+        return len(parts) == 2 and parts[0] in MIPS_REGISTERS \
+            and parts[1] in MIPS_REGISTERS
+    t = sim.read_register(parts[1])
+    sim.write_register(parts[0],t)
+
+def instr_mthi(sim,parts):
+    if sim is None:
+        return check_jumpreg_instr(parts)
+    t = sim.read_register(parts[0])
+    sim.write_register('HI',t)
+
+def instr_mtlo(sim,parts):
+    if sim is None:
+        return check_jumpreg_instr(parts)
+    t = sim.read_register(parts[0])
+    sim.write_register('LO',t)
+
+def instr_sb(sim,parts):
+    if sim is None:
+        return check_indirect_instr(parts)
+    addr = parts[1] + sim.read_register(parts[2])
+    sim.write_byte(addr,sim.read_register(parts[0]))
+
+def instr_sh(sim,parts):
+    if sim is None:
+        return check_indirect_instr(parts)
+    addr = parts[1] + sim.read_register(parts[2])
+    sim.write_halfword(addr,sim.read_register(parts[0]))
+
+def instr_sw(sim,parts):
+    if sim is None:
+        return check_indirect_instr(parts)
+    addr = parts[1] + sim.read_register(parts[2])
+    sim.write_word(addr,sim.read_register(parts[0]))
+
+def instr_syscall(sim,parts):
+    if sim is None:
+        return len(parts) == 0
+    # simulate the SPIM system calls
+    v = sim.read_register('$v0')
+    if v == 1:
+        # print_int ($a0 = word to print)
+
+        system.print_int(sim.read_register('$a0'))
+    elif v == 4:
+        # print_string ($a0 = pointer to null-terminated buffer)
+
+        system.print_string(sim.read_string(sim.read_register('$a0')))
+    elif v == 5:
+        # read_int
+
+        pass
+    elif v == 8:
+        # read_string ($a0 = pointer to buffer, $a1 = amount)
+
+        pass
+    elif v == 10:
+        # exit ($a0 = process return code)
+
+        system.exit(sim.read_register('$a0'))
+    elif v == 11:
+        # print_character ($a0 = char)
+
+        pass
+    elif v == 12:
+        # read_character
+
+        pass
+    else:
+        runtime_error("could not execute system call {0}: no such service".format(v))
 
 # define useful constant information for the program
 STACK_SPACE = 8192
@@ -321,11 +579,12 @@ MIPS_INSTRUCTIONS = {'add':instr_add,'addu':instr_addu,'addi':instr_addi,'addiu'
                      'ori':instr_ori,'sll':instr_sll,'sllv':instr_sllv,'sra':instr_sra,
                      'srav':instr_srav,'srl':instr_srl,'srlv':instr_srlv,'sub':instr_sub,
                      'subu':instr_subu,'xor':instr_xor,'xori':instr_xori,'slt':instr_slt,
-                     'sltu':instr_sltu,'slti':instr_slti,'sltiu':instr_sltiu,'beq':NOP,
-                     'bgtz':NOP,'blez':NOP,'bne':NOP,'j':NOP,'jal':NOP,'jalr':NOP,'jr':NOP,
-                     'la':NOP,'lhi':NOP,'li':NOP,'llo':NOP,'lb':NOP,'lbu':NOP,'lh':NOP,
-                     'lhu':NOP,'lw':NOP,'mfhi':NOP,'mflo':NOP,'move':NOP,'mthi':NOP,
-                     'mtlo':NOP,'sb':NOP,'sh':NOP,'sw':NOP,'syscall':NOP}
+                     'sltu':instr_sltu,'slti':instr_slti,'sltiu':instr_sltiu,'beq':instr_beq,
+                     'bgtz':instr_bgtz,'blez':instr_blez,'bne':instr_bne,'j':instr_j,'jal':instr_jal,
+                     'jalr':instr_jalr,'jr':instr_jr,'la':instr_la,'lhi':instr_lhi,'li':instr_li,
+                     'llo':instr_llo,'lb':instr_lb,'lbu':instr_lbu,'lh':instr_lh,'lhu':instr_lhu,
+                     'lw':instr_lw,'mfhi':instr_mfhi,'mflo':instr_mflo,'move':instr_move,'mthi':instr_mthi,
+                     'mtlo':instr_mtlo,'sb':instr_sb,'sh':instr_sh,'sw':instr_sw,'syscall':instr_syscall}
 MIPS_REGISTERS = {'$0' : 0, '$zero' : 0, '$r0' : 0,
                   '$1' : 4,'$at' : 4, '$2' : 8, '$v0' : 8,
                   '$3' : 12,'$v1' : 12, '$4' : 16, '$a0' : 16,
@@ -341,12 +600,25 @@ MIPS_REGISTERS = {'$0' : 0, '$zero' : 0, '$r0' : 0,
                   '$23' : 92, '$s7' : 92, '$24' : 96, '$t8' : 96,
                   '$25' : 100, '$t9' : 100, '$26' : 104, '$k0' : 104,
                   '$27' : 108, '$k1' : 108, '$28' : 112, '$gp' : 112,
-                  '$29' : 116, '$sp' : 116, '$30' : 120, '$s8' : 120,
+                  '$29' : 116, '$sp' : 116, '$30' : 120, '$fp' : 120,
                   '$31' : 124, '$ra' : 124, 'HI' : 128, 'LO' : 132}
 STRING_ESCAPES = ((r'\\a','\x07'),(r'\\b','\x08'),(r'\\f','\x0c'),(r'\\n','\x0a'),
                   (r'\\r','\x0d'),(r'\\t','\x09'),(r'\\v','\x0b'),(r'\\\\',r'\x5c'),
                   (r'\\\'','\x27'),(r'\\"','\x22'),(r'\\([0-7]{3})',lambda x:chr(int(x.group(1),8))),
                   (r'\\([0-9a-f]{2})',lambda x:chr(int(x.group(1),16))))
+LABEL_INSTRS = ['beq','bgtz','blez','bne','j','jal','jalr','jr','la']
+
+class MIPSSystem:
+    def __init__(self):
+        self.buf = ""
+        self.fdtable = {}
+
+    def exit(self,v):
+        exit(v)
+    def print_int(self,i):
+        stdout.write("{0}".format(i))
+    def print_string(self,s):
+        stdout.write(s)
 
 class MIPSSimulator:
     def __init__(self,f):
@@ -361,6 +633,9 @@ class MIPSSimulator:
         # allocate registers as a memory stream; each register has a
         # constant offset into this memory
         self.regmem = io.BytesIO()
+        self.regmem.seek(200)
+        self.regmem.write("\x00")
+        self.regmem.seek(0)
 
         # position the stack pointer register at the top of the main
         # memory stream
@@ -370,10 +645,6 @@ class MIPSSimulator:
         # create the program counter (this is the offset within the
         # list of instructions of the next instruction to execute)
         self.progCounter = 0
-
-        # create a flag to indicate if the simulation is running; this
-        # flag is tripped when the 'exit' system call is made
-        self.alive = True
 
     def write_register(self,reg,value):
         # each register is a 4-byte word; value should be a Python
@@ -386,7 +657,8 @@ class MIPSSimulator:
         # read a 4-byte value from the register memory stream; the
         # result should be a Python 'long/int'
         self.regmem.seek(MIPS_REGISTERS[reg])
-        return struct.unpack('i',self.regmem.read(4))[0]
+        mem = self.regmem.read(4)
+        return struct.unpack('i',mem)[0]
 
     def write_memory(self,addr,data):
         # write some data to the main memory stream
@@ -411,9 +683,33 @@ class MIPSSimulator:
         mem = self.read_memory(addr,4)
         return struct.unpack('i',mem)[0]
 
+    def write_halfword(self,addr,value):
+        self.write_memory(addr,struct.pack('h',value))
+
+    def read_halfword(self,addr):
+        mem = self.read_memory(addr,2)
+        return struct.unpack('h',mem)[0]
+
+    def write_byte(self,addr,value):
+        self.write_memory(addr,struct.pack('b',value))
+
+    def read_byte(self,addr):
+        mem = self.read_memory(addr,1)
+        return struct.unpack('b',mem)[0]
+
+    def read_string(self,addr):
+        s = ""
+        while True:
+            bu = self.read_byte(addr)
+            if bu == 0:
+                break
+            s += chr(bu)
+            addr += 1
+        return s
+
     def simulation(self):
         # run the simulation
-        while self.alive:
+        while True:
             if self.progCounter >= len(self.instr):
                 runtime_error("attempted to execute non-instruction: bad offset in program")
 
@@ -498,7 +794,7 @@ class MIPSParser:
                         self.data.append((state,(content[1:len(content)-1],),label,line))
                     elif state == 'space':
                         try:
-                            self.data.append((state,int(content),label,line))
+                            self.data.append((state,(int(content),),label,line))
                         except ValueError:
                             error_on_line("'space' directive requires integer allocation amount argument",line)
                     else:
@@ -573,7 +869,7 @@ class MIPSParser:
                     bs = struct.pack("{0}s".format(len(s)+1),s)
                 elif kind == 'space':
                     # fill in space with zero bytes
-                    bs = struct.pack("{0}b".format(thing),0)
+                    bs = struct.pack("{0}b".format(thing),*([0]*thing))
                 addr += memory.write(bs)
         memory.seek(0)
 
@@ -594,12 +890,12 @@ class MIPSParser:
         # type of arguments; check_instr will perform any other
         # instruction-specific processing
         for instrs, _, line in self.instr:
-            i = 0
-            for i in xrange(len(instrs)):
-                if instrs[i] in labels:
-                    instrs[i] = labels[instrs[i]]
-            MIPSParser.check_instr(instrs,line)
-            instructions.append(instrs)
+            # a label can only be used by a select few instructions;
+            # it only appears as the last argument also
+            if instrs[0] in LABEL_INSTRS:
+                if instrs[-1] in labels:
+                    instrs[-1] = labels[instrs[-1]]
+            instructions.append(MIPSParser.check_instr(instrs,line))
         instructions = tuple(instructions)
 
         # save tuple of the program information to a pickle file
@@ -607,11 +903,17 @@ class MIPSParser:
 
     @staticmethod
     def check_instr(parts,line):
-        # check that the instruction exists and is well-formed
+        # check that the instruction exists and is well-formed; we
+        # will return a new list containing any conversions/additions
+        # that are needed for processing the instruction
         if not parts[0] in MIPS_INSTRUCTIONS:
             error_on_line("'{0}' is not a valid instruction".format(parts[0]),line)
-        if not MIPS_INSTRUCTIONS[parts[0]](None,parts):
+        t = parts[1:]
+        iname = parts[0]
+        if not MIPS_INSTRUCTIONS[iname](None,t):
             error_on_line("'{0}' instruction is not formatted correctly".format(parts[0]),line)
+        t.insert(0,iname)
+        return t
 
     @staticmethod
     def eval_string_literal(literal):
@@ -643,6 +945,9 @@ def onestep(asmfile):
         parser.build_program(exefile)
         exefile.seek(0)
         execmips(exefile)
+
+# create a MIPSSystem object to handle system interactions
+system = MIPSSystem()
 
 # create argument parser for simulator and parse command-line
 # arguments
