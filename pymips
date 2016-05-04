@@ -2,11 +2,11 @@
 # pymips
 import re
 import io
+import os
 import ctypes
 import struct
 import pickle
 import argparse
-from time import sleep
 from sys import stdin
 from sys import stdout
 from sys import stderr
@@ -73,6 +73,7 @@ from sys import stderr
 #  sltiu $d, $s, i   | $d = $s < SE(i)            | set if less than signed immediate
 #
 #  beq   $s, $t, lbl | if $s==$t goto lbl         | branch equal
+#  bgez  $s, lbl     | if $s >= 0 goto lbl        | branch greater-than-or-equal-to zero
 #  bgtz  $s, lbl     | if $s > 0 goto lbl         | branch greater-than zero
 #  blez  $s, lbl     | if $s <= 0 goto lbl        | branch less-than-or-equal-to zero
 #  bne   $s, $t,lbl  | if $s!=$t goto lbl         | branch not-equal
@@ -121,6 +122,12 @@ def check_register_instr(parts):
     # <REG> <REG> <REG>
     if len(parts) != 3 or not parts[0] in MIPS_REGISTERS or not parts[1] in MIPS_REGISTERS \
        or not parts[2] in MIPS_REGISTERS:
+        return False
+    return True
+
+def check_register_instr2(parts):
+    # <REG> <REG>
+    if len(parts) != 2 or not parts[0] in MIPS_REGISTERS or not parts[1] in MIPS_REGISTERS:
         return False
     return True
 
@@ -223,21 +230,21 @@ def instr_andi(sim,parts):
     if sim is None:
         return check_immed_instr(parts)
     t = sim.read_register(parts[1])
-    sim.write_register(parts[0],ctypes.c_uint32(t & parts[2]))
+    sim.write_register(parts[0],ctypes.c_uint32(t & parts[2]).value)
 
 def instr_div(sim,parts):
     if sim is None:
-        return check_register_instr(parts)
-    t = sim.read_register(parts[1])
-    u = sim.read_register(parts[2])
+        return check_register_instr2(parts)
+    t = sim.read_register(parts[0])
+    u = sim.read_register(parts[1])
     sim.write_register('HI',ctypes.c_int32(t % u).value)
     sim.write_register('LO',ctypes.c_int32(t // u).value)
 
 def instr_divu(sim,parts):
     if sim is None:
-        return check_register_instr(parts)
-    t = sim.read_register(parts[1])
-    u = sim.read_register(parts[2])
+        return check_register_instr2(parts)
+    t = sim.read_register(parts[0])
+    u = sim.read_register(parts[1])
     sim.write_register('HI',ctypes.c_uint32(t % u).value)
     sim.write_register('LO',ctypes.c_uint32(t // u).value)
 
@@ -257,15 +264,15 @@ def instr_mulu(sim,parts):
 
 def instr_mult(sim,parts):
     if sim is None:
-        return check_register_instr(parts)
-    t = sim.read_register(parts[1]) * sim.read_register(parts[2])
+        return check_register_instr2(parts)
+    t = sim.read_register(parts[0]) * sim.read_register(parts[1])
     sim.write_register('HI',ctypes.c_int32(t >> 32).value)
     sim.write_register('LO',ctypes.c_int32(t).value)
 
 def instr_multu(sim,parts):
     if sim is None:
-        return check_register_instr(parts)
-    t = sim.read_register(parts[1]) * sim.read_register(parts[2])
+        return check_register_instr2(parts)
+    t = sim.read_register(parts[0]) * sim.read_register(parts[1])
     sim.write_register('HI',ctypes.c_uint32(t >> 32).value)
     sim.write_register('LO',ctypes.c_uint32(t).value)
 
@@ -408,6 +415,13 @@ def instr_beq(sim,parts):
     u = ctypes.c_int32(sim.read_register(parts[1])).value
     if t == u:
         sim.progCounter = parts[2]
+
+def instr_bgez(sim,parts):
+    if sim is None:
+        return check_direct_instr(parts)
+    t = ctypes.c_int32(sim.read_register(parts[0])).value
+    if t >= 0:
+        sim.progCounter = parts[1]
 
 def instr_bgtz(sim,parts):
     if sim is None:
@@ -614,11 +628,14 @@ def instr_syscall(sim,parts):
     elif v == 5:
         # read_int
 
-        pass
+        i = system.read_int()
+        sim.write_register('$v0',i)
     elif v == 8:
-        # read_string ($a0 = pointer to buffer, $a1 = amount)
+        # read_string ($a0 = pointer to buffer, $a1 = amount); returns
+        # number of bytes read
 
-        pass
+        n = system.read_string(sim,sim.read_register('$a0'),sim.read_register('$a1'))
+        sim.write_register('$v0',n)
     elif v == 10:
         # exit ($a0 = process return code)
 
@@ -630,7 +647,7 @@ def instr_syscall(sim,parts):
     elif v == 12:
         # read_character
 
-        pass
+        sim.write_register('$v0',system.read_character())
     else:
         runtime_error("could not execute system call {0}: no such service".format(v))
 
@@ -638,12 +655,12 @@ def instr_syscall(sim,parts):
 STACK_SPACE = 8192
 NOP = lambda: None
 MIPS_INSTRUCTIONS = {'add':instr_add,'addu':instr_addu,'addi':instr_addi,'addiu':instr_addiu,
-                     'and':instr_and,'andi':instr_and,'div':instr_div,'divu':instr_divu,
+                     'and':instr_and,'andi':instr_andi,'div':instr_div,'divu':instr_divu,
                      'mul':instr_mul,'mulu':instr_mulu,'mult':instr_mult,'multu':instr_multu,
                      'nor':instr_nor,'or':instr_or,'ori':instr_ori,'sll':instr_sll,'sllv':instr_sllv,
                      'sra':instr_sra,'srav':instr_srav,'srl':instr_srl,'srlv':instr_srlv,'sub':instr_sub,
                      'subu':instr_subu,'xor':instr_xor,'xori':instr_xori,'slt':instr_slt,
-                     'sltu':instr_sltu,'slti':instr_slti,'sltiu':instr_sltiu,'beq':instr_beq,
+                     'sltu':instr_sltu,'slti':instr_slti,'sltiu':instr_sltiu,'beq':instr_beq,'bgez':instr_bgez,
                      'bgtz':instr_bgtz,'blez':instr_blez,'bne':instr_bne,'j':instr_j,'jal':instr_jal,
                      'jalr':instr_jalr,'jr':instr_jr,'la':instr_la,'lhi':instr_lhi,'li':instr_li,
                      'llo':instr_llo,'lb':instr_lb,'lbu':instr_lbu,'lh':instr_lh,'lhu':instr_lhu,
@@ -670,11 +687,12 @@ STRING_ESCAPES = ((r'\\a','\x07'),(r'\\b','\x08'),(r'\\f','\x0c'),(r'\\n','\x0a'
                   (r'\\r','\x0d'),(r'\\t','\x09'),(r'\\v','\x0b'),(r'\\\\',r'\x5c'),
                   (r'\\\'','\x27'),(r'\\"','\x22'),(r'\\([0-7]{3})',lambda x:chr(int(x.group(1),8))),
                   (r'\\([0-9a-f]{2})',lambda x:chr(int(x.group(1),16))))
-LABEL_INSTRS = ['beq','bgtz','blez','bne','j','jal','jalr','jr','la','lb','lbu','lh','lhu','lw',
+LABEL_INSTRS = ['beq','bgez','bgtz','blez','bne','j','jal','jalr','jr','la','lb','lbu','lh','lhu','lw',
                 'sw','sh','sw'] # only these instructions can resolve labels
 SHEBANG = "#!/usr/bin/env pymips\n"
 
 class MIPSSystem:
+    REGEX_TOKEN = re.compile('\s*([^\s]+)')
     def __init__(self):
         self.buf = ""
         self.fdtable = {}
@@ -687,6 +705,66 @@ class MIPSSystem:
         stdout.write(s)
     def print_character(self,v):
         stdout.write(chr(v))
+
+    def read_int(self):
+        tok = self.read_token()
+        return int(tok)
+    def read_character(self):
+        # return the character as an integer (its ordinal value)
+        c = self.buf[:1]
+        if len(c) == 0:
+            self.buf = stdin.readline()
+            if len(self.buf) == 0:
+                runtime_error("unexpected EOF on read operation")
+            c = self.buf[:1]
+            self.buf = self.buf[1:]
+        return ord(c)
+    def read_string(self,sim,addr,amount):
+        # this works similarly to 'fgets'
+        s = ""
+
+        # pop off anything from the buffer within the amount of bytes
+        # requested or until a newline has been read; if the buffer
+        # becomes empty before we have read the requisite number of
+        # bytes, read another line into the buffer
+        while amount > 0:
+            # check for newlines in the input stream
+            p = self.buf.find("\n")
+            if p != -1:
+                p += 1 # include newline in buffer (potentially)
+                if p > amount:
+                    p = amount
+                s += self.buf[:p]
+                self.buf = self.buf[p:]
+                break
+            amount -= len(self.buf)
+            s += self.buf[:amount]
+            self.buf = self.buf[amount:]
+            if len(self.buf) == 0:
+                self.buf = stdin.readline()
+                if len(self.buf) == 0:
+                    break
+
+        # write the string into simulator's memory at the specified
+        # address and return the number of bytes written
+        sim.write_memory(addr,s)
+        return len(s)
+
+    def read_token(self):
+        # if we cannot read a token from the buffer, then the buffer
+        # needs to be updated
+        while True:
+            m = MIPSSystem.REGEX_TOKEN.match(self.buf)
+            if m:
+                break
+            # if we didn't match then only whitespaces were in the
+            # buffer; so replace the buffer with a new line
+            self.buf = stdin.readline()
+            if len(self.buf) == 0:
+                runtime_error("unexpected EOF on read operation")
+        tok = m.group(1)
+        self.buf = self.buf[m.end(1):]
+        return tok
 
 class MIPSSimulator:
     def __init__(self,f):
@@ -722,14 +800,14 @@ class MIPSSimulator:
         # 'long/int' that we wrap into a word and write to the memory
         # stream
         self.regmem.seek(MIPS_REGISTERS[reg])
-        self.regmem.write(struct.pack('i',value))
+        self.regmem.write(struct.pack('<i',ctypes.c_int32(value).value))
 
     def read_register(self,reg):
         # read a 4-byte value from the register memory stream; the
         # result should be a Python 'long/int'
         self.regmem.seek(MIPS_REGISTERS[reg])
         mem = self.regmem.read(4)
-        return struct.unpack('i',mem)[0]
+        return struct.unpack('<i',mem)[0]
 
     def write_memory(self,addr,data):
         # write some data to the main memory stream
@@ -747,26 +825,26 @@ class MIPSSimulator:
 
     def write_word(self,addr,value):
         # write a word to main memory
-        self.write_memory(addr,struct.pack('i',value))
+        self.write_memory(addr,struct.pack('<i',ctypes.c_int32(value).value))
 
     def read_word(self,addr):
         # read a word from main memory
         mem = self.read_memory(addr,4)
-        return struct.unpack('i',mem)[0]
+        return struct.unpack('<i',mem)[0]
 
     def write_halfword(self,addr,value):
-        self.write_memory(addr,struct.pack('h',value))
+        self.write_memory(addr,struct.pack('<h',ctypes.c_int16(value).value))
 
     def read_halfword(self,addr):
         mem = self.read_memory(addr,2)
-        return struct.unpack('h',mem)[0]
+        return struct.unpack('<h',mem)[0]
 
     def write_byte(self,addr,value):
-        self.write_memory(addr,struct.pack('b',value))
+        self.write_memory(addr,struct.pack('<b',ctypes.c_int8(value).value))
 
     def read_byte(self,addr):
         mem = self.read_memory(addr,1)
-        return struct.unpack('b',mem)[0]
+        return struct.unpack('<b',mem)[0]
 
     def read_string(self,addr):
         s = ""
@@ -844,7 +922,7 @@ class MIPSParser:
                 elif content in ['byte','half','word','ascii','asciiz','space']:
                     state = content
                 else:
-                    error_on_line("directive '{0}' is not recognized".format(content))
+                    error_on_line("directive '{0}' is not recognized".format(content),line)
             elif kind == 'label':
                 label = content
             elif kind == 'any':
@@ -869,7 +947,9 @@ class MIPSParser:
                         except ValueError:
                             error_on_line("'space' directive requires integer allocation amount argument",line)
                     else:
-                        error_on_line("cannot understand {0}".format(content),line)
+                        if state == 'globl':
+                            error_on_line("globl symbol '{0}' must be in text segment".format(content),line)
+                        error_on_line("cannot understand '{0}'".format(content),line)
                 elif mode == 'text':
                     if state != '':
                         if state == 'globl':
@@ -924,11 +1004,11 @@ class MIPSParser:
 
             for thing in things:
                 if kind == 'byte':
-                    bs = struct.pack("b",thing)
+                    bs = struct.pack("<b",thing)
                 elif kind == 'half':
-                    bs = struct.pack("h",thing)
+                    bs = struct.pack("<h",thing)
                 elif kind == 'word':
-                    bs = struct.pack("i",thing)
+                    bs = struct.pack("<i",thing)
                 elif kind == 'ascii':
                     # this kind has no zero byte terminator
                     s = MIPSParser.eval_string_literal(thing)
@@ -969,7 +1049,15 @@ class MIPSParser:
             instructions.append(MIPSParser.check_instr(instrs,line))
         instructions = tuple(instructions)
 
-        # save tuple of the program information to a pickle file
+        # save tuple of the program information to a pickle file;
+        # place a shebang in the pickle file so we can execute the
+        # program file using the simulator; also mark the file as
+        # executable (this will have no effect on some platforms)
+        if isinstance(outfile,str):
+            outfile = open(outfile,'w')
+        if isinstance(outfile,file):
+            mode = os.stat(outfile.name).st_mode
+            os.chmod(outfile.name,mode | 0111)
         outfile.write(SHEBANG)
         pickle.dump((instructions,memory.read()),outfile,pickle.HIGHEST_PROTOCOL)
 
@@ -1006,8 +1094,7 @@ def assemblemips(asmfile):
     # and write them to the specified output file
     global args
     parser = MIPSParser(asmfile)
-    with open(args.outputFile,'w') as of:
-        parser.build_program(of)
+    parser.build_program(args.outputFile)
 
 def onestep(asmfile):
     # assemble the mips instructions from the specified file stream
