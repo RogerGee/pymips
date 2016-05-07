@@ -7,6 +7,7 @@ import ctypes
 import struct
 import pickle
 import argparse
+from sys import exit
 from sys import stdin
 from sys import stdout
 from sys import stderr
@@ -1054,7 +1055,7 @@ class MIPSParser:
         # program file using the simulator; also mark the file as
         # executable (this will have no effect on some platforms)
         if isinstance(outfile,str):
-            outfile = open(outfile,'w')
+            outfile = open(outfile,'wb')
         if isinstance(outfile,file):
             mode = os.stat(outfile.name).st_mode
             os.chmod(outfile.name,mode | 0111)
@@ -1124,5 +1125,5 @@ args = argp.parse_args()
 if args.filename is None and args.action == execmips:
     runtime_error("no input program file")
 
-with stdin if args.filename is None else open(args.filename,'r') as f:
+with stdin if args.filename is None else open(args.filename,'rb') as f:
     args.action(f)
