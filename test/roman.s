@@ -1,7 +1,7 @@
 	.text
-    jal main
-    li $v0,10
-    syscall
+	jal main
+	li $v0,10
+	syscall
 print_int:
 	addiu	$sp,$sp,-8
 	sw	$fp,4($sp)

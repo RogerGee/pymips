@@ -1,0 +1,378 @@
+\documentclass[12pt]{article}
+\usepackage[margin=0.5in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage[colorlinks=true,linkcolor=blue]{hyperref}
+\usepackage{hhline}
+\usepackage{graphicx,listings,mips}
+\usepackage{alltt,multicol,scrextend}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\graphicspath{{figures/}}
+\renewcommand{\ttdefault}{pcr}
+\lstset{
+    language=[mips]Assembler,
+    basicstyle=\footnotesize\ttfamily,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    frame=single,
+    captionpos=b,
+    title=\lstname
+}
+
+\begin{document}
+\begin{titlepage}
+    \centering
+    {\Huge \textbf{Pymips}\par}
+    {\Large User Guide and Tutorial\par}
+    \vfill
+    {\textit{Roger Gee}\par}
+    \large \today
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Introduction and General Usage}
+\label{sec:intro}
+
+Pymips is a simple assembler and simulator for MIPS. It is designed to be used
+     as a cross-platform tool for exploring assembly programming and building
+     toy compilers. While Pymips doesn't provide a complete implementation of
+     the MIPS instruction set, it provides nearly everything you would need to
+     implement a basic programming language that does integer arithmetic, logic
+     and control branching.\\
+
+\subsection{Installing Pymips}
+
+Pymips is a Python program and requires Python unless you install the frozen
+     version of Pymips. Ideally it should run as a command-line program that can
+     be executed by your shell. This means the relevant files should be
+     installed in a location defined in the shell's PATH environment
+     variable. On Linux-based systems this may be a location like
+     \texttt{/usr/local/bin}. On Windows you may need to create a directory for
+     the program that you add to the shell's \texttt{PATH} environment
+     variable.\\
+
+Now you should be able to run the program from your shell like so:
+
+\begin{alltt}
+    $ pymips ...
+\end{alltt}
+
+On Windows it is recommended that you install the frozen version so that it can
+     be executed more easily as if it were a native binary. If you don't, you
+     may rename the script \texttt{pymips} to \texttt{pymips.py}. Hopefully your
+     Python installation has registered \textit{.py} files with the interpreter
+     so the shell can launch them.\\
+
+You can always run the script locally like so:
+
+\begin{alltt}
+    $ python pymips
+        OR (on linux-based systems)
+    $ ./pymips
+\end{alltt}
+
+But this becomes burdensome if you work on multiple projects using Pymips.\\
+
+\subsection{Invoking Pymips}
+
+Pymips runs in one of two modes: assembler or simulator. It is also possible to
+     run the program in both modes in one step, first in assembler mode then in
+     simulator mode. The default mode is simulator, meaning with no special
+     arguments Pymips thinks you want to execute a program already assembled
+     with Pymips, like so:
+
+\begin{alltt}
+    $ pymips program.mips
+\end{alltt}
+
+This tells Pymips to execute the assembled program stored in the file
+     \textit{program.mips}.\\
+
+To assemble a program from its source assembly instructions, use the
+     \texttt{'a'} option to run Pymips in assembler mode. You can also use the
+     \texttt{'o'} option in tandem to specify the desired output file for the
+     assembled program:
+
+\begin{alltt}
+    $ pymips -a program.s -oprogram.mips
+\end{alltt}
+
+To see Pymips in action, let's assemble and simulate a simple program that
+     prints \textit{Hello World} to the screen. The listing for \textit{hello.s}
+     shows a simple program that prints a string to the console.\\
+
+\lstinputlisting[title={{\lstname} - The preeminent first program}]{hello.s}
+
+To assemble the program, run the following command:
+
+\begin{alltt}
+    $ pymips -a -ohello.mips hello.s
+\end{alltt}
+
+Pymips should have written no output, which indicates success. The file
+     \texttt{hello.mips} now exists and can be executed. Note that the file
+     extension \texttt{.mips} is unnecessary. I use it conventionally to refer
+     to an assembled MIPS program. To execute the file, pass it to Pymips with
+     no arguments. You should see the following output:
+
+\begin{alltt}
+    $ pymips hello.mips
+    Hello, World!
+    pymips: error: attempted to execute non-instruction: bad offset in program
+\end{alltt}
+
+If you are using a Linux-based platform, Pymips will turn on executable bits of
+     the output file's file mode. This means you can execute it like any other
+     program. This works since Pymips writes a \textit{shebang} into the output
+     file that can invoke Pymips. For example:
+
+\begin{alltt}
+    $ ./hello.mips
+    Hello, World!
+    pymips: error: attempted to execute non-instruction: bad offset in program
+\end{alltt}
+
+As mentioned earlier, it is possible to have Pymips perform both assembling and
+     simulating in one step with the \texttt{'one-step'} option. This produces
+     no executable output file and is convenient to use for testing. In this way
+     Pymips behaves more like an on-the-fly interpreter than a multistage
+     assembler/simulator. For example:
+
+\begin{alltt}
+    $ pymips --one-step hello.s
+    Hello, World!
+    pymips: error: attempted to execute non-instruction: bad offset in program
+\end{alltt}
+
+The error message \textit{attempted to execute non-instruction} simply means
+     that our simple program didn't exit normally. The next section will discuss
+     this in detail and explain how to write MIPS programs.
+
+\section{Writing MIPS programs for Pymips}
+
+While this guide assumes you are familiar with MIPS and assembler programming,
+     this section provides some important information regarding how to write
+     assembly language programs for the Pymips platform. It will also provide
+     suggestions on how several high-level programming language features may be
+     implemented at the Pymips level.\\
+
+A MIPS program is completely \textit{unstructured}. This means there are no
+     innate control mechanisms built into the language's syntax. A program is
+     simply a set of instructions (called the \textit{program text}), executed
+     one after the other. In addition to a program's instructions is its global
+     data or \textit{data segment}. The program's data segment is a region of
+     memory that the program can use to store global data. Furthermore, MIPS
+     programs are provided a \textit{stack segment} for local data storage. This
+     section will explain these facets of a MIPS program in more detail.\\
+
+\subsection{MIPS Registers}
+
+Registers are the most basic memory regions in an assembler program. MIPS has 32
+     general purpose registers, each having one word (i.e. 32 bits) of
+     space. The registers have numeric names from \texttt{\$0} to \texttt{\$31}
+     and also conventional names. The following table shows the general purpose
+     registers, including their numeric and conventional names and a short
+     description of their conventional use:\\
+
+\begin{tabular}{c | c | c}
+    \textbf{numeric name} & \textbf{conventional name} & \textbf{usage}\\
+    \hhline{=|=|=}
+    \texttt{\$0} & \texttt{\$zero} (\texttt{\$r0}) & holds the value zero \\ \hline
+    \texttt{\$1} & \texttt{\$at} & argument temporary register \\ \hline
+    \texttt{\$2} & \texttt{\$v0} & return value register \\ \hline
+    \texttt{\$3} & \texttt{\$v1} & return value register \\ \hline
+    \texttt{\$4} & \texttt{\$a0} & argument register \\ \hline
+    \texttt{\$5} & \texttt{\$a1} & argument register \\ \hline
+    \texttt{\$6} & \texttt{\$a2} & argument register \\ \hline
+    \texttt{\$7} & \texttt{\$a3} & argument register \\ \hline
+    \texttt{\$8} & \texttt{\$t0} & temporary register (unpreserved) \\ \hline
+    \texttt{\$9} & \texttt{\$t1} & temporary register (unpreserved) \\ \hline
+    \texttt{\$10} & \texttt{\$t2} & temporary register (unpreserved) \\ \hline
+    \texttt{\$11} & \texttt{\$t3} & temporary register (unpreserved) \\ \hline
+    \texttt{\$12} & \texttt{\$t4} & temporary register (unpreserved) \\ \hline
+    \texttt{\$13} & \texttt{\$t5} & temporary register (unpreserved) \\ \hline
+    \texttt{\$14} & \texttt{\$t6} & temporary register (unpreserved) \\ \hline
+    \texttt{\$15} & \texttt{\$t7} & temporary register (unpreserved) \\ \hline
+    \texttt{\$16} & \texttt{\$s0} & save register (preserved) \\ \hline
+    \texttt{\$17} & \texttt{\$s1} & save register (preserved) \\ \hline
+    \texttt{\$18} & \texttt{\$s2} & save register (preserved) \\ \hline
+    \texttt{\$19} & \texttt{\$s3} & save register (preserved) \\ \hline
+    \texttt{\$20} & \texttt{\$s4} & save register (preserved) \\ \hline
+    \texttt{\$21} & \texttt{\$s5} & save register (preserved) \\ \hline
+    \texttt{\$22} & \texttt{\$s6} & save register (preserved) \\ \hline
+    \texttt{\$23} & \texttt{\$s7} & save register (preserved) \\ \hline
+    \texttt{\$24} & \texttt{\$t8} & temporary register (unpreserved) \\ \hline
+    \texttt{\$25} & \texttt{\$t9} & temporary register (unpreserved) \\ \hline
+    \texttt{\$26} & \texttt{\$k0} & kernel register \\ \hline
+    \texttt{\$27} & \texttt{\$k1} & kernel register \\ \hline
+    \texttt{\$28} & \texttt{\$gp} & global pointer register \\ \hline
+    \texttt{\$29} & \texttt{\$sp} & stack pointer register \\ \hline
+    \texttt{\$30} & \texttt{\$fp} & frame pointer register \\ \hline
+    \texttt{\$31} & \texttt{\$ra} & return address register \\ \hline
+\end{tabular}
+
+\vspace{0.1in} Some of these registers (e.g. \texttt{\$k0}, \texttt{\$k1}) have
+     no special use since Pymips is only a simulator. So you can use them for
+     whatever purpose you deem fit. Note that even though a register has a
+     conventional use, you can still disregard it and still have a valid
+     assembly program.\\
+
+\subsection{Formatting Instructions}
+
+Instructions belong in the program's text segment. To indicate to the assembler
+     that we want to place instructions in the program's text, we use the
+     \texttt{.text} directive\footnote{A \textit{directive} is a statement in an
+     assembler program that indicates some metainformation about the
+     program. They always begin with a dot (\texttt{.}).}. The basic format of a
+     program should be as follows:
+
+\begin{alltt}
+    .text
+    [instructions follow...]
+\end{alltt}
+
+Instructions have a simple syntax to follow. Each instruction is represented by
+     a text label (e.g. \texttt{add} or \texttt{move}). The instruction's
+     arguments (if any) follow the instruction label. The following example
+     listing demonstrates some instructions that print out the integer 4:
+
+\begin{lstlisting}
+    .text
+    li $a0, 4 # load 4 into register
+    li $v0, 1 # load 1 (print_int)
+    syscall   # system call to print integer
+\end{lstlisting}
+
+A full listing of supported instructions and their syntax is available in the
+     \hyperref[sec:iref]{instruction reference} section.\\
+
+\subsection{Formatting the Data Segment}
+
+Obviously space in the registers is limited and other memory locations are
+     required. The data segment is a part of a program's main memory that allows
+     you to allocate storage locations that can be accessed globally. Data
+     definitions also allow you to place specific values into main memory
+     locations, which is useful to have specific data available at runtime
+     (e.g. a text string). Any data definition must follow a \texttt{.data}
+     directive. You can place data directives anywhere in the program, and mix
+     them with \texttt{.text} directives however you choose.\\
+
+Pymips supports the following data directives:\\
+
+\begin{addmargin}[0.5in]{0.5in}
+    \texttt{.byte <N>, [<N>, <N>, ...]} - define a byte\\
+    \texttt{.half <N>, [<N>, <N>, ...]} - define a half-word (i.e. 2-byte value)\\
+    \texttt{.word <N>, [<N>, <N>, ...]} - define a word (i.e. 4-byte value)\\
+    \texttt{.ascii <STRING>} - define ASCII string\\
+    \texttt{.asciiz <STRING>} - define zero-terminated ASCII string\\
+    \texttt{.space <AMOUNT>} - define arbitrary block of memory\\
+\end{addmargin}
+
+The directives \texttt{.byte}, \texttt{.half} and \texttt{.word} allow you to
+     specify one or more literal integer values to place in the data
+     segment. The rest of the data directives expect only a single value. The
+     argument to the \texttt{.space} directive is the number of bytes you wish
+     to allocate. When using the \texttt{.ascii} or \texttt{.asciiz} directives
+     you give a string literal (double-quoted text string). You can use special
+     escape sequences inside the string literals. The standard C escape
+     sequences are supported, including octal and hexadecimal literals. Octal
+     literals contain three digits and hex literals contain two following the
+     backslash.\\
+
+As a simple example, here is a program that prints out a list of numbers. Notice
+     that an extra address is allocated to detect how long the list is
+     (i.e. denote the end):
+
+\lstinputlisting[title={{\lstname} - Print list of words}]{print-list.s}
+
+Here is another example program that reads in two half-words and prints out the
+     value of the resulting word. The first half-word will be the lower 16 bits
+     and the second will be the upper 16 bits:
+
+\lstinputlisting[title={{\lstname} - Show transaction with data segment}]{halves.s}
+
+As seen in the example programs, to access data declared in the data segment,
+     you use a label\footnote{A label is an identifier that appears first on a
+     line in an assembler program followed by a colon (:)}. The label can be
+     used with certain instructions and is substituted with the data value's
+     address in memory when the program is assembled. Using labels is useful but
+     not required when using the different data directives.\\
+
+\subsection{Using the Stack}
+
+Like the data segment, the stack segment is a special memory region that is used
+     for storing data in the program's main memory. Unlike the data segment, the
+     stack segment is used to store local as opposed to global data. This
+     distinction makes sense when you consider how procedures are implemented in
+     a computer program (think function-local variables instead of global
+     variables). Consider the following C program:\\
+
+\begin{lstlisting}[language=C]
+#include <stdlib.h>
+
+int a;
+int main(int argc,const char* argv[])
+{
+    int b;
+
+    b = atoi(argv[1]);
+    a = b+1;
+    return 0;
+}
+\end{lstlisting}
+
+If this program were compiled to assembler instructions, the variable \texttt{a}
+     would be stored in the data segment and the variable \texttt{b} would be
+     stored in the stack segment. Furthermore, the parameters \texttt{argc} and
+     \texttt{argv} as well as the argument passed to \texttt{atoi} are also
+     allocated on the stack.\\
+
+An important feature of stack memory is that it can grow and shrink according to
+     the behavior of a stack. Consider a recursive C function that computes a
+     factorial:\\
+
+\begin{lstlisting}[language=C]
+int fac(int n)
+{
+    if (n <= 2)
+        return n;
+    return n * fac(n-1);
+}
+\end{lstlisting}
+
+Each time a call is made to \texttt{fac}, another word is allocated on the stack
+     to store that parameter \texttt{n}. Then, each time \texttt{fac} returns,
+     the memory is ``popped off''. As you can tell, this is an important feature
+     for making sure we have unique memory locations for each instantiation of a
+     procedure. \hyperref[sec:proc]{A later section} will detail how procedures
+     can be implemented in MIPS assembler programming.\\
+
+Stack memory is addressed by the value of the stack pointer register,
+     \texttt{\$sp}\footnote{Note that there is also a frame pointer register
+     that is used for addressing the stack}. Unlike the data segment, where we
+     have hard-coded labels that represent memory locations, the stack is
+     addressed solely by means of the stack pointer register (and offsets from
+     that register).\\
+
+Stack memory always grows \textit{downwards}. When a program begins, the stack
+     pointer contains the highest possible address available on the stack. This
+     means that the most recently allocated address should be that with the
+     lowest magnitude. To allocate more data on the stack, simply subtract from
+     the stack pointer by the number of bytes you wish to allocate.\\
+
+Can the stack run out of space? Yes, it can. Eventually the stack segment and
+     data segment collide given Pymips' memory layout. This means you could
+     potentially overwrite the data segment if your program pushes past the
+     stack segment. Pymips gives 1MB of space to the stack.\\
+
+\subsection{Procedures}
+\label{sec:proc}
+
+\section{Instruction Reference}
+\label{sec:iref}
+
+\end{document}

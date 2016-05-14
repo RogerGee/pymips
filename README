@@ -41,3 +41,7 @@ Documentation:
 Documentation is included in the repository under doc/. You will need to compile
 the LaTeX sources. Compiled versions are also available in the Release archives
 for each platform available on GitHub.
+
+To compile the latex document, you may need the following style definition that
+extends the 'listings' package. The file is mips.sty and is located here:
+https://gist.github.com/walkie/4591789.

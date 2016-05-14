@@ -653,7 +653,7 @@ def instr_syscall(sim,parts):
         runtime_error("could not execute system call {0}: no such service".format(v))
 
 # define useful constant information for the program
-STACK_SPACE = 8192
+STACK_SPACE = 1048576
 NOP = lambda: None
 MIPS_INSTRUCTIONS = {'add':instr_add,'addu':instr_addu,'addi':instr_addi,'addiu':instr_addiu,
                      'and':instr_and,'andi':instr_andi,'div':instr_div,'divu':instr_divu,
