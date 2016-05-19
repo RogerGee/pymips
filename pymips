@@ -132,7 +132,7 @@ def check_register_instr2(parts):
         return False
     return True
 
-REGEX_IMMED = re.compile('-?[0-9]+') # immediate must be an integer
+REGEX_IMMED = re.compile('-?[0-9]+$') # immediate must be an integer
 def check_immed_instr(parts):
     # <REG> <REG> <IMMED>
     if len(parts) != 3 or not parts[0] in MIPS_REGISTERS or not parts[1] in MIPS_REGISTERS \

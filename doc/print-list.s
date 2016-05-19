@@ -16,4 +16,5 @@ top:    lw      $a0, ($t0)      # load value at current address
         li      $a0, 10
         syscall
         li      $v0, 10         # do exit
+        li      $a0, 0          # process return code set to 0
         syscall

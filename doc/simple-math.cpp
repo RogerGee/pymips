@@ -335,12 +335,13 @@ void code_gen(prefix_expr& expr)
         code_gen_recursive(expr);
 
     cout << "li $v0, 1\n"
-         << "syscall\n"
-         << "li $a0, 10\n"
-         << "li $v0, 11\n"
-         << "syscall\n"
-         << "li $v0, 10\n"
-         << "syscall\n";
+        "syscall\n"
+        "li $a0, 10\n"
+        "li $v0, 11\n"
+        "syscall\n"
+        "li $v0, 10\n"
+        "li $a0, 0\n"
+        "syscall\n";
 }
 
 int main(int argc,const char* argv[])

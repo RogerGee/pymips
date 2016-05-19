@@ -16,6 +16,7 @@ start:  la      $t0, stuff
         li      $v0, 11         # load syscall number for print_character
         syscall                 # print_character()
         li      $v0, 10         # load syscall number for exit
+        li      $a0, 0          # load argument (process return code)
         syscall                 # exit()
 
         .data
