@@ -2,7 +2,7 @@
 \usepackage[margin=0.5in]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage[colorlinks=true,linkcolor=blue]{hyperref}
-\usepackage{hhline,wrapfig}
+\usepackage{hhline,wrapfig,longtable}
 \usepackage{graphicx,listings,mips}
 \usepackage{alltt,multicol,scrextend}
 
@@ -37,12 +37,12 @@
 \section{Introduction and General Usage}
 \label{sec:intro}
 
-Pymips is a simple assembler and simulator for MIPS. It is designed to be used
-     as a cross-platform tool for exploring assembly programming and building
-     toy compilers. While Pymips doesn't provide a complete implementation of
-     the MIPS instruction set, it provides nearly everything you would need to
-     implement a basic programming language that does integer arithmetic, logic
-     and control branching.
+Pymips is a simple assembler and simulator platform for MIPS. It is designed to
+     be used as a cross-platform tool for exploring assembly language
+     programming and building toy compilers. While Pymips doesn't provide a
+     complete implementation of the MIPS instruction set, it provides nearly
+     everything you would need to implement a basic programming language that
+     does integer arithmetic, logic and control branching.
 
 \subsection{Installing Pymips}
 
@@ -53,7 +53,8 @@ Pymips is a Python program and requires Python unless you install the frozen
      variable. On Linux-based systems this may be a location like
      \texttt{/usr/local/bin}. On Windows you may need to create a directory for
      the program that you add to the shell's \texttt{PATH} environment
-     variable.\\
+     variable. Consult your operating system vendor for the appropriate
+     documentation.\\
 
 Now you should be able to run the program from your shell like so:
 
@@ -67,7 +68,7 @@ On Windows it is recommended that you install the frozen version so that it can
      Python installation has registered \textit{.py} files with the interpreter
      so the shell can launch them.\\
 
-You can always run the script locally like so:
+You can always run the script directly like so:
 
 \begin{alltt}
     $ python pymips
@@ -75,15 +76,16 @@ You can always run the script locally like so:
     $ ./pymips
 \end{alltt}
 
-But this becomes burdensome if you work on multiple projects using Pymips.
+\textit{But} this becomes burdensome if you work on multiple projects using
+     Pymips.
 
 \subsection{Invoking Pymips}
 
 Pymips runs in one of two modes: assembler or simulator. It is also possible to
-     run the program in both modes in one step, first in assembler mode then in
-     simulator mode. The default mode is simulator, meaning with no special
-     arguments Pymips thinks you want to execute a program already assembled
-     with Pymips, like so:
+     run the program through both modes in one step, first in assembler mode
+     then in simulator mode. The default mode is simulator, meaning with no
+     special arguments Pymips thinks you want to execute a program already
+     assembled with Pymips, like so:
 
 \begin{alltt}
     $ pymips program.mips
@@ -101,9 +103,12 @@ To assemble a program from its source assembly instructions, use the
     $ pymips -a program.s -oprogram.mips
 \end{alltt}
 
+This command assembles \textit{program.s} into the output file
+     \textit{program.mips}.\\
+
 To see Pymips in action, let's assemble and simulate a simple program that
      prints \textit{Hello World} to the screen. The listing for \textit{hello.s}
-     shows a simple program that prints a string to the console.\\
+     shows a simple program that prints a string to the console:\\
 
 \lstinputlisting[title={{\lstname} - The preeminent first program}]{hello.s}
 
@@ -113,11 +118,11 @@ To assemble the program, run the following command:
     $ pymips -a -ohello.mips hello.s
 \end{alltt}
 
-Pymips should have written no output, which indicates success. The file
-     \texttt{hello.mips} now exists and can be executed. Note that the file
+Pymips should have written no output to the screen, which indicates success. The
+     file \texttt{hello.mips} now exists and can be executed. Note that the file
      extension \texttt{.mips} is unnecessary. I use it conventionally to refer
-     to an assembled MIPS program. To execute the file, pass it to Pymips with
-     no arguments. You should see the following output:
+     to an assembled MIPS program file. To execute the file, pass it to Pymips
+     with no arguments. You should see the following output:
 
 \begin{alltt}
     $ pymips hello.mips
@@ -125,8 +130,8 @@ Pymips should have written no output, which indicates success. The file
     pymips: error: attempted to execute non-instruction: bad offset in program
 \end{alltt}
 
-If you are using a Linux-based platform, Pymips will turn on executable bits of
-     the output file's file mode. This means you can execute it like any other
+If you are using a Linux-based platform, Pymips will turn on the executable bits
+     of the output file's mode. This means you can execute it like any other
      program. This works since Pymips writes a \textit{shebang} into the output
      file that can invoke Pymips. For example:
 
@@ -164,20 +169,23 @@ While this guide assumes you are familiar with MIPS and assembler programming,
 A MIPS program is completely \textit{unstructured}. This means there are no
      innate control mechanisms built into the language's syntax. A program is
      simply a set of instructions (called the \textit{program text}), executed
-     one after the other. In addition to a program's instructions is its global
-     data or \textit{data segment}. The program's data segment is a region of
-     memory that the program can use to store global data. Furthermore, MIPS
-     programs are provided a \textit{stack segment} for local data storage. This
-     section will explain these facets of a MIPS program in more detail.
+     one after the other. In addition to a program's instructions are its memory
+     segments. The program's main memory is divided into two different segments:
+     the \textit{data segment} and the \textit{stack segment}. The program's
+     data segment is a region of memory that is used to store global data. The
+     stack segment is a memory region used for local data storage. This section
+     will explain these different parts of a MIPS program in more detail.
 
 \subsection{MIPS Registers}
 
-Registers are the most basic memory regions in an assembler program. MIPS has 32
-     general purpose registers, each having one word (i.e. 32 bits) of
-     space. The registers have numeric names from \texttt{\$0} to \texttt{\$31}
-     and also conventional names. The following table shows the general purpose
-     registers, including their numeric and conventional names and a short
-     description of their conventional use:\\
+Registers are the most basic memory regions in an assembler program. They
+     correspond to memory directly available in the CPU. Most instructions
+     require that data first be loaded into a register. MIPS has 32 general
+     purpose registers, each having one word (i.e. 32 bits) of space. The
+     registers have numeric names from \texttt{\$0} to \texttt{\$31} and also
+     conventional names. The following table lists the general purpose
+     registers, including their numeric and conventional names followed by a
+     short description of their conventional use:\\
 
 \begin{tabular}{c | c | c}
     \textbf{numeric name} & \textbf{conventional name} & \textbf{usage}\\
@@ -243,8 +251,9 @@ Instructions belong in the program's text segment. To indicate to the assembler
 
 Instructions have a simple syntax to follow. Each instruction is represented by
      a text label (e.g. \texttt{add} or \texttt{move}). The instruction's
-     arguments (if any) follow the instruction label. The following example
-     listing demonstrates some instructions that print out the integer 4:
+     arguments (if any) follow the instruction label and are
+     comma-separated. The following example listing demonstrates some
+     instructions that print out the integer 4:
 
 \begin{lstlisting}
     .text
@@ -269,19 +278,19 @@ To make any useful MIPS program, we need to interact with the system
     \textbf{syscall} & \textbf{no.} & \textbf{arguments} &
      \textbf{description} \\ \hhline{=#=|=|=}
 
-    \textit{print\_int} & 1 & \texttt{\$a0 - word to print} & Print an integer
+    \texttt{print\_int} & 1 & \texttt{\$a0} - word to print & Print an integer
      to stdout \\ \hline
 
-    \textit{print\_string} & 4 & \texttt{\$a0 - pointer to null-terminated string} 
-        & Print a text string to stdout \\ \hline
+    \texttt{print\_string} & 4 & \texttt{\$a0} - pointer to null-terminated
+     string & Print a text string to stdout \\ \hline
 
-    \textit{read\_int} & 5 &  & Returns next input token interpreted as an
+    \texttt{read\_int} & 5 &  & Returns next input token interpreted as an
      integer \\ \hline
 
-    \textit{read\_string} & 8 & \texttt{\$a0 - pointer to input buffer; \$a1 -
-     size of input buffer} & Reads a string into the input
-     buffer up until a newline character, the end of input or until the buffer
-     is full\footnote{if a newline character is read, it will be read into the
+    \texttt{read\_string} & 8 & \texttt{\$a0} - pointer to input buffer;
+     \texttt{\$a1} - size of input buffer & Reads a string into the input buffer
+     up until a newline character, the end of input or until the buffer is
+     full\footnote{if a newline character is read, it will be read into the
      buffer}; returns the number of bytes read \\ \hline
 \end{tabular}
 
@@ -289,11 +298,11 @@ To make any useful MIPS program, we need to interact with the system
     \textbf{syscall} & \textbf{no.} & \textbf{arguments} &
      \textbf{description} \\ \hhline{=#=|=|=}
 
-    \textit{exit} & 10 & \texttt{\$a0 - process return code} & Terminate the
+    \textit{exit} & 10 & \texttt{\$a0} - process return code & Terminate the
      process (this should be done at the end of every well-formed program)
      \\ \hline
 
-    \textit{print\_character} & 11 & \texttt{\$a0 - character to print} & Print
+    \textit{print\_character} & 11 & \texttt{\$a0} - character to print & Print
      single character; the argument should be in the range $0..255$ \\ \hline
 
     \textit{read\_character} & 12 & & returns the next character read from stdin\\
@@ -317,14 +326,14 @@ It's worth mentioning the purpose of the \texttt{exit} system call as it is
 
 \subsection{Formatting the Data Segment}
 
-Obviously space in the registers is limited and other memory locations are
-     required. The data segment is a part of a program's main memory that allows
-     you to allocate storage locations that can be accessed globally. Data
-     segment directives allow you to place specific values into main memory
-     locations, which is useful to have specific data available at runtime
-     (e.g. a text string). Any data directive must follow a \texttt{.data}
-     directive. You can place data directives anywhere in the program, and mix
-     them with \texttt{.text} directives however you choose.\\
+Obviously space in the registers is limited and more memory is required. The
+     data segment is the part of a program's main memory that allows you to
+     allocate storage locations that can be accessed globally. Data segment
+     directives allow you to place specific values into main memory that are
+     available at runtime (e.g. a text string). Any data segment directive must
+     follow an initial \texttt{.data} directive. You can place these directives
+     anywhere in the program and mix them with \texttt{.text} directives however
+     you choose.\\
 
 Pymips supports the following data directives:\\
 
@@ -339,18 +348,19 @@ Pymips supports the following data directives:\\
 
 The directives \texttt{.byte}, \texttt{.half} and \texttt{.word} allow you to
      specify one or more literal integer values to place in the data
-     segment. The rest of the data directives expect only a single value. The
-     argument to the \texttt{.space} directive is the number of bytes you wish
-     to allocate. When using the \texttt{.ascii} or \texttt{.asciiz} directives
-     you give a string literal (double-quoted text string). You can use special
-     escape sequences inside the string literals. The standard C escape
-     sequences are supported, including octal and hexadecimal literals. Octal
-     literals contain three digits and hex literals contain two following the
-     backslash. For example the following are all equivilent:\\
+     segment. The rest of the data segment directives expect only a single
+     value. The argument to the \texttt{.space} directive is the number of bytes
+     you wish to allocate. When using the \texttt{.ascii} or \texttt{.asciiz}
+     directives you give a string literal (double-quoted text string). You can
+     use special escape sequences inside the string literals. The standard C
+     escape sequences are supported, including octal and hexadecimal
+     literals. Octal literals contain three digits and hex literals contain two
+     digits following the backslash. For example the following are all
+     equivalent:\\
 
 \begin{addmargin}[0.5in]{0.5in}
     \begin{alltt}
-        "Hello\textbackslash012" <=> "Hello\textbackslash0a" <=> "Hello\textbackslash n"
+        "Hello\textbackslash012" <=> "Hello\textbackslash0a" <=> "Hello\textbackslash\,n"
     \end{alltt}
 \end{addmargin}
 
@@ -358,7 +368,7 @@ As a simple example of how the data segment can be used, here is a program that
      prints out a list of numbers stored in its data segment. Notice that an
      extra address is allocated to detect how long the list is (i.e. denote the
      end):\\
-
+\newpage
 \lstinputlisting[title={{\lstname} - Print list of words}]{print-list.s}
 
 Here is another example program that reads in two half-words and prints out the
@@ -376,12 +386,13 @@ As seen in the example programs, to access data declared in the data segment,
 
 Note that the data segment in Pymips is only as large as you make it. The first
      data directive gets the lowest magnitude address and every subsequent entry
-     is allocated contiguously from there.
+     is allocated contiguously from there. Pymips will pad the data segment to
+     some multiple of eight bytes (for alignment purposes).
 
 \subsection{Understanding the Stack Segment}
 
-Like the data segment, the stack segment is a special memory region that is used
-     for storing data in the program's main memory. Unlike the data segment, the
+Like the data segment, the stack segment is a memory region that is used for
+     storing data in the program's main memory. Unlike the data segment, the
      stack segment is used to store local as opposed to global data. This
      distinction makes sense when you consider how procedures are implemented in
      a computer program (think function-local variables instead of global
@@ -439,12 +450,12 @@ Stack memory always grows \textit{downwards}. When a program begins, the stack
      lowest magnitude. To allocate more data on the stack, simply subtract from
      the stack pointer by the number of bytes you wish to allocate.\\
 
-Can the stack run out of space? Yes, it can. Eventually the stack segment and
-     data segment collide given Pymips' memory layout. This means you could
-     potentially overwrite the data segment if your program pushes past the
-     stack segment. Pymips doesn't check for actual stack overflows, just if you
-     push out of the total available main memory. Note that Pymips gives 1MB of
-     space to the stack.\\
+Obviously the stack can run out of space if it grows too much. Eventually the
+     stack segment and data segment collide given Pymips' memory layout. This
+     means you could potentially overwrite the data segment if your program
+     pushes past the stack segment. Pymips doesn't check for actual stack
+     overflows, just if you push out of the total available main memory. Note
+     that Pymips gives 1MB of space to the stack.\\
 
 The next section will show practical uses of the stack in implementing
      procedures.
@@ -452,23 +463,24 @@ The next section will show practical uses of the stack in implementing
 \subsection{Procedures}
 \label{sec:proc}
 
-A procedure is a self-contained block of instructions that fulfills some purpose
+A procedure is a reusable block of instructions that fulfills some purpose
      within the program. This corresponds to the concept of a function in
      C. However, unlike in C, assembler programming is still unstructured,
      meaning there are no assembly language constructs that innately support
      procedures. Instead, a procedure is defined (like many things in assembler
      programming) conventionally. This means that we could define our own
-     convention if we wanted. However, in this guide, we are going to explore
-     the C language calling convention to write assembler programs that employ
-     procedures.\\
+     convention if we wanted. However, in this guide, we are going to explore a
+     common calling convention used to implement procedures in MIPS assembler
+     programs.\\
 
 The first thing to understand about a procedure is that it is just a block of
      instructions to which the program will jump. Once executed, we jump back to
-     the address from which we originally jumped. To do this, we use the
+     the address from which the procedure was called. To do this, we use the
      \texttt{jal} and \texttt{jr} instructions. When \texttt{jal} is executed,
      it saves the current offset in the program text to the register
-     \texttt{\$ra}. The instruction \texttt{jr} allows us to jump to the address
-     as specified in a register.\\
+     \texttt{\$ra} and jumps to the specified offset. The instruction
+     \texttt{jr} allows us to jump to the address as specified in a register; in
+     this case this will be the \texttt{\$ra} register set by \texttt{jal}.\\
 
 The basic outline of a procedure would look like the following:\\
 \begin{lstlisting}
@@ -477,28 +489,33 @@ proc:       # beginning of procedure
     jr $ra  # return back to caller
 \end{lstlisting}
 
-To call the procedure, we would issue the following instruction: \texttt{jal
+To call this procedure, we would issue the following instruction: \texttt{jal
      proc}.\\
 
 Defining the body of and calling a procedure is pretty easy. Unfortunately
      procedures introduce some more complexity we have to worry about such as
-     arguments, return values and local data storage. We might also have to
-     worry about potentially overwriting any registers that are in use between
+     arguments, return values and local data storage. We also have to worry
+     about potentially overwriting any registers that are in use between
      procedure calls. Fortunately, the calling convention is detailed enough to
      consider all of these scenarios so that we can take appropriate
-     action. Let's start by discussing the layout of the stack.\\
+     action. Since all of these details involve the stack, let's start by
+     discussing the layout of the stack.\\
 
 Figure \ref{fig:stackframe} shows a generic MIPS stack frame according to the C
      calling convention. A \textit{stack frame} is a block of contiguous memory
-     on the stack that is locally used by a procedure. When a procedure begins,
+     on the stack that is used locally by a procedure. When a procedure begins,
      it updates the stack pointer register to point to the top of its new stack
-     frame. The ``top'' of the stack is what \texttt{\$sp} points to in the
-     figure (the bottom of the figure). The stack is allocated in multiples of 8
-     to avoid address-alignment errors\footnote{This is why there is an empty
-     space above \textit{return address} in the stack frame diagram.} (up to
-     objects of size 64-bits). If your source language only uses data objects
-     that are at most a word size long then you could get away with using
-     multiples of 4.\\
+     frame. In this case, the ``top'' of the stack is what \texttt{\$sp} points
+     to in the figure (the bottom of the figure). Each stack frame is allocated
+     to some multiple of 8-bytes to avoid address-alignment errors\footnote{This
+     is why there is an empty space above \textit{return address} in the stack
+     frame diagram; this can represent zero or more words of padding to help
+     achieve alignment. Alignment ensures that objects placed on the stack have
+     addresses that are easily computed (e.g. some multiple of a power of two)}
+     (for objects of up to size 64-bits). If your source language only uses data
+     objects that are at most a word size long then you could get away with
+     using multiples of four but this guide will show examples that allocate to
+     a multiple of eight.\\
 
 \newpage
 \begin{wrapfigure}{r}{0.55\textwidth}
@@ -508,15 +525,15 @@ Figure \ref{fig:stackframe} shows a generic MIPS stack frame according to the C
 \label{fig:stackframe}
 \end{wrapfigure}
 
-Notice that the stack frame has storage for all of the things we mentioned
-     earlier. But as you may have realized not every procedure will need all
+Notice that the stack frame has storage for all the things we mentioned
+     earlier. But, as you may have realized, not every procedure will need all
      these things. For example, a procedure may not require any argument space
-     if it never makes a procedure call of its own (a so-called
-     \textit{leaf-procedure}). Consider even a procedure that doesn't require
-     any stack space (i.e. it doesn't need a stack frame at all). The rule of
-     thumb to remember is that if something is omitted it shouldn't change the
-     order of things listed in the generic stack frame specification. The
-     omission simply has a size of zero.\\
+     if it never makes a procedure call of its own (a so-called \textit{leaf
+     procedure}). Also consider a procedure that doesn't require any stack space
+     (i.e. it doesn't need a stack frame at all). The rule of thumb to remember
+     is that if something is omitted it shouldn't change the order of sections
+     in the generic stack frame specification. An omission simply gives a
+     section a size of zero.\\
 
 The following subsections will give more specific information and examples on
      using the different parts of the stack frame.\\
@@ -529,8 +546,8 @@ A procedure needs to remember the address of its caller so that it can
      overwritten. Therefore we must save this value on our stack frame. Space
      for the return address is positioned below the local variable space. A
      procedure will commonly write the return address to the stack just after
-     allocating its stack frame. Likewise it will restore the value of
-     \texttt{\$ra} before unloading its stack frame. If the procedure does not
+     allocating its stack frame. Before the procedure returns it will restore
+     the value of \texttt{\$ra} from the stack frame. If the procedure does not
      make a procedure call itself, there is no need to save the return address
      to the stack.\\
 
@@ -545,25 +562,34 @@ proc:   addiu   $sp, $sp, -24   # 16 bytes for arguments + 8 bytes
         addiu   $sp, $sp, 24    # pop off stack frame
         jr      $ra
 \end{lstlisting}
+\vspace{-0.25in}
+\subsubsection{Return Value}
+
+A procedure should store its return value in the register \texttt{\$v0}. If you
+     need more space for a return value, you can also use the register
+     \texttt{\$v1}. If you need to return a compound data type from a procedure,
+     you would need to allocate space in the caller's stack frame (this exceeds
+     the scope of this guide).
 
 \newpage
 \subsubsection{Save Registers}
 \label{sec:saveregs}
 
-The calling convention allows certain registers (i.e. the save registers,
+The calling convention specifies certain registers (i.e. the save registers,
      \texttt{\$s0 .. \$s7}) to be saved to the stack by a procedure. A procedure
-     only saves a save register if it intends to modify its value. In this way,
-     we only go through the expense of saving a save register if we know its
-     value is going to change locally within the procedure. Also note that it is
-     the callee's responsibility to save registers, since it knows if it is
-     going to modify them.\\
+     only saves a register if it intends to modify its value. In this way, we
+     only go through the expense of saving and restoring a register if we know
+     its value is going to change locally within the procedure. Also note that
+     it is the callee's responsibility to save registers, since it knows if it
+     is going to modify them.\\
 
 This process works similarly to how the return address register is saved to the
-     stack. When the procedure is about to return, it needs to restore the
-     original value of these registers. This way, the caller never is aware that
-     they were modified (i.e. the entire process is transparent to the
-     caller). A practical example that uses a save register is demonstrated in
-     the next subsection.
+     stack. When the procedure is called, it writes any save registers it will
+     use to its stack frame. When the procedure is about to return, it restores
+     the original value of these registers. In this way, the caller never is
+     aware that they were modified (i.e. the entire process is transparent to
+     the caller). A practical example of saving registers is demonstrated in the
+     next subsection.
 
 \subsubsection{Arguments}
 
@@ -578,19 +604,19 @@ A procedure's parameters are allocated by its caller and therefore exist in the
      arguments. Furthermore it does not write any data into this space. It
      simply provides the callee with some space in case it needs to save the
      values of the argument registers. This is important if the procedure is
-     going to invoke another procedure itself and need to overwrite the argument
+     going to invoke another procedure itself which would overwrite the argument
      registers. Any more arguments are written directly to the stack by the
      caller.\\
 
 To access parameters on the stack, we use positive offsets from the bottom of
-     our stack frame. It is possible to use the stack frame register to refer to
-     the bottom of our stack frame so that we just have to remember offsets from
-     that point on\footnote{Interestingly I have seen some compilers use both
-     the stack frame and stack pointer register to refer to the top of the
-     stack. Also, some documentation on MIPS registers doesn't even specify a
+     our stack frame\footnote{It is possible to use the stack frame register to
+     refer to the bottom of our stack frame so that we just have to remember
+     offsets from that point on. However, the frame pointer register's purpose
+     is difficult to place. Some documentation on MIPS doesn't even specify a
      frame pointer register; instead, register \texttt{\$30} is another save
-     register.}. Otherwise we can just use the stack pointer register to refer
-     to everything, even when we have to push into the previous stack frame.\\
+     register.}. Since the stack pointer points to the top of our stack frame,
+     we will need to skip over our stack frame and push into the caller's stack
+     frame.\\
 
 Here is a practical example. Consider the following C program that recursively
      computes the $N^{th}$ Fibonacci term (note that any system call wrappers
@@ -621,8 +647,9 @@ Since we make two recursive calls that depend on parameter \texttt{n}, we will
 
 Each call to \texttt{fib} will allocate 24 bytes on the stack since we must
      allocate at least 4 words for argument space plus some space for the return
-     address (this procedure uses no local variables). The argument stack space
-     will be used by \textit{both} the first and second recursive calls.\\
+     address and save registers (this procedure uses no local variables). The
+     argument stack space will be used by \textit{both} the first and second
+     recursive calls.\\
 
 \lstinputlisting[title={{\lstname} - Computing a Fibonacci term}]{fib.s}
 
@@ -631,10 +658,11 @@ Each call to \texttt{fib} will allocate 24 bytes on the stack since we must
 
 Local variables are stack-allocated memory regions used while a procedure is
      executing and forgotten when a procedure returns. To access local variables
-     within a procedure block, use offsets from the current value of the stack
-     pointer register. These should be positive offsets that are multiples of 4
-     bytes. Each local variable will have its own assigned offset from the stack
-     pointer.\\
+     within a procedure block, use positive offsets from the current value of
+     the stack pointer register\footnote{You may consider aligning the local
+     variable space to some byte-boundary, especially if implementing
+     arrays.}. Each local variable will have its own assigned offset from the
+     stack pointer.\\
 
 The stack frame diagram seen previously showed that local variables are stored
      toward the bottom of the stack frame (i.e. furthest away from the value of
@@ -644,7 +672,7 @@ The stack frame diagram seen previously showed that local variables are stored
 
 Consider the following C function (note that any system call wrappers implied by
      the source code denote direct system calls and not procedure calls). It
-     prints out the integer ASCII values of an input string:\\
+     prints out the ASCII values of an input string in decimal:\\
 
 \begin{lstlisting}[language=C]
 void foo()
@@ -661,14 +689,15 @@ void foo()
 \end{lstlisting}
 
 Note that this example is slightly non-trivial since we can't use a register to
-     hold a text string buffer - we must allocate \texttt{buf} on the
-     stack. Also recall that the C language reserved word \texttt{register} is a
-     hint to the compiler not to allocate an object on the stack and instead
-     optimize the value to a register. Since we are the compiler in this case,
-     we will play nicely and respect the programmer's wishes. It's actually easy
-     to use a register since the \texttt{int} data type corresponds to a single
-     word that fits perfectly in a register.\\
+     hold a text string buffer. We must allocate \texttt{buf} on the
+     stack. Recall that the C language reserved word \texttt{register} is a hint
+     to the compiler not to allocate an object on the stack and instead optimize
+     the value to a register. Since we are the compiler in this case, we will
+     play nicely and respect the programmer's wishes. It's actually easy to use
+     a register since the \texttt{int} data type corresponds to a single word
+     that fits perfectly in a register.\\
 
+\newpage
 The compiled code might look something like this:\\
 
 \lstinputlisting{ascii.s}
@@ -676,32 +705,37 @@ The compiled code might look something like this:\\
 Since \texttt{foo} is a simple leaf procedure, we only need to allocate space
      for the local variable \texttt{buf}. It turns out that our buffer size
      plays nicely with our stack pointer alignment requirement (8-byte
-     boundaries). We would have to add in extra bytes to align to some multiple
-     of eight. Note that it is up to you how to structure your local variable
-     block. They do not necessarily need to align on any specific boundary
-     though it may be beneficial to your implementation for you to do so.
+     boundaries). Normally, we might have had to add in extra bytes to align to
+     some multiple of eight. Note that it is up to you how to structure your
+     local variable block. They do not necessarily need to align on any specific
+     boundary though it may be beneficial to your implementation for you to do
+     so.
 
 \subsection{The Application Runtime}
 \label{sec:runtime}
 
 You may have heard the term \textit{runtime library}. On most platforms this
-     refers to a small (or potentially large) segment of code inserted into your
-     compiled program that provides runtime functionality. This library is
-     unlike other libraries your program may have loaded as it provides core
+     refers to a relatively small (or sometimes potentially large) portion of
+     code linked into your compiled program that provides a language's basic
+     interfaces and functionality. It is important to distinguish this library
+     from other libraries your program may have loaded as it provides core
      programming language functionality instead of some application-specific
-     functionality. For example, the C language runtime performs initialization
-     of global variables and calls \texttt{main}. It also takes the return value
-     from \texttt{main} and passes it the system via \texttt{exit} to terminate
-     the process. In more complex languages, the runtime library provides more
-     support. For example, C++ provides runtime exception handling and dynamic
-     type information.\\
+     functionality. Oftentimes runtime libraries will contain generic procedures
+     for math or I/O to make life easier.\\
 
-When building a compiler for a language, you most likely will want to include
+For example, the C language runtime calls the application entry point,
+     \texttt{main}. It also properly terminates the process by passing the
+     return value from \texttt{main} to the system call \texttt{exit}. In more
+     complex languages, the runtime library provides even more support. For
+     example, the C++ runtime provides exception handling, global initialization
+     (e.g. object constructors) and dynamic type information.\\
+
+When building a compiler for any language, you most likely will want to include
      some sort of minimal runtime support. For example, if you were wanting to
      define an application entry point (such as a \texttt{main} function) for
      your language, you probably want to include a minimal runtime that calls
      \texttt{main} and then calls \texttt{exit} with the return value from
-     \texttt{main}. For example:
+     \texttt{main}. For example:\\
 
 \begin{lstlisting}
     .text
@@ -713,10 +747,208 @@ When building a compiler for a language, you most likely will want to include
     ... # compiled code goes here
 \end{lstlisting}
 
+This runtime support code should always appear at the very beginning of the
+     program's text segment. Any compiled code would appear afterwards. Note
+     that if the higher-level language only allows execution within procedures
+     then the order of the defined procedures in the text segment is not
+     important since we can jump backwards or forwards in assembler.\\
+
 If you are compiling a relatively unstructured language, then it is sufficient
      to simply inject a call to \texttt{exit} at the end of the program.
 
+\newpage
 \section{Instruction Reference}
 \label{sec:iref}
+
+\begin{longtable}{l || l | l}
+    \textbf{syntax} & \textbf{operation} & \textbf{description}\\
+    \hhline{=#=|=}
+    \texttt{add   \$d, \$s, \$t} & \texttt{\$d = \$s + \$t} & add registers, signed\\ \hline
+    \texttt{addu  \$d, \$s, \$t} & \texttt{\$d = \$s + \$t} & add registers, unsigned\\ \hline
+    \texttt{addi  \$d, \$s, i} & \texttt{\$d = \$s + SE(i)} & add immediate, signed\\ \hline
+    \texttt{addiu \$d, \$s, i} & \texttt{\$d = \$s + SE(i)} & add immediate, unsigned\\ \hline
+    \texttt{and   \$d, \$s, \$t} & \texttt{\$d = \$s \& \$t} & bit-and\\ \hline
+    \texttt{andi  \$d, \$s, i} & \texttt{\$d = \$s \& ZE(i)} & bit-and immediate\\ \hline
+    \texttt{div   \$s, \$t} & \texttt{hi = \$s \% \$t, lo = \$s / \$t} & division, signed\\ \hline
+    \texttt{divu  \$s, \$t} & \texttt{hi = \$s \% \$t, lo = \$s / \$t} & division, unsigned\\ \hline
+    \texttt{mul   \$d, \$s, \$t} & \texttt{\$d = \$s * \$t} & multiplication, signed\\ \hline
+    \texttt{mulu  \$d, \$s, \$t} & \texttt{\$d = \$s * \$t} & multiplication, unsigned\\ \hline
+    \texttt{mult  \$s, \$t} & \texttt{hi:lo = \$s*\$t} & multiplication, signed\\ \hline
+    \texttt{multu \$s, \$t} & \texttt{hi:lo = \$s*\$t} & multiplication, unsigned\\ \hline
+    \texttt{nor   \$d, \$s, \$t} & \texttt{\$d = ~(\$s \& \$t)} & bit-not-or\\ \hline
+    \texttt{or    \$d, \$s, \$t} & \texttt{\$d = \$s \& \$t} & bit-or\\ \hline
+    \texttt{ori   \$d, \$s, i} & \texttt{\$d = \$s \& ZE(i)} & bit-or, immediate\\ \hline
+    \texttt{sll   \$d, \$s, a} & \texttt{\$d = \$s << a} & left-shift (by variable or constant)\\ \hline
+    \texttt{sllv  \$d, \$s, \$t} & \texttt{\$d = \$s << \$t} & same as \texttt{sll}\\ \hline
+    \texttt{sra   \$d, \$s, a} & \texttt{\$d = \$s >> a  with sign-ex} & arithmetic right-shift (by variable or constant)\\ \hline
+    \texttt{srav  \$d, \$s, \$t} & \texttt{\$d = \$s >> \$t with sign-ex} & same as \texttt{sra}\\ \hline
+    \texttt{srl   \$d, \$s, a} & \texttt{\$d = \$s >> a} & logical right-shift (by variable or constant)\\ \hline
+    \texttt{srlv  \$d, \$s, \$t} & \texttt{\$d = \$s >> \$t} & same as \texttt{srl}\\ \hline
+    \texttt{sub   \$d, \$s, \$t} & \texttt{\$d = \$s - \$t} & subtraction, signed\\ \hline
+    \texttt{subu  \$d, \$s, \$t} & \texttt{\$d = \$s - \$t} & subtraction, unsigned\\ \hline
+    \texttt{xor   \$d, \$s, \$t} & \texttt{\$d = \$s \^{} \$t} & bit-xor\\ \hline
+    \texttt{xori  \$d, \$s, i} & \texttt{\$d = \$s \^{} ZE(i)} & bit-xor immediate\\
+    \hhline{=#=|=}
+    \texttt{slt   \$d, \$s, \$t} & \texttt{\$d = \$s < \$t} & set if less than signed\\ \hline
+    \texttt{sltu  \$d, \$s, \$t} & \texttt{\$d = \$s < \$t} & set if less than unsigned\\ \hline
+    \texttt{slti  \$d, \$s, i} & \texttt{\$d = \$s < SE(i)} & set if less than signed immediate\\ \hline
+    \texttt{sltiu \$d, \$s, i} & \texttt{\$d = \$s < SE(i)} & set if less than signed immediate\\
+    \hhline{=#=|=}
+    \texttt{beq   \$s, \$t, lbl} & \texttt{if \$s == \$t goto lbl} & branch equal\\ \hline
+    \texttt{bgez  \$s, lbl} & \texttt{if \$s >= 0 goto lbl} & branch greater-than-or-equal-to zero\\ \hline
+    \texttt{bgtz  \$s, lbl} & \texttt{if \$s > 0 goto lbl} & branch greater-than zero\\ \hline
+    \texttt{blez  \$s, lbl} & \texttt{if \$s <= 0 goto lbl} & branch less-than-or-equal-to zero\\ \hline
+    \texttt{bne   \$s, \$t, lbl} & \texttt{if \$s != \$t goto lbl} & branch not-equal\\ \hline
+    \texttt{blt   \$s, \$t, lbl} & \texttt{if \$s < \$t goto lbl} & branch less-than\\
+    \hhline{=#=|=}
+    \texttt{j     lbl} & \texttt{goto lbl} & unconditional jump\\ \hline
+    \texttt{jal   lbl} & \texttt{\$ra = addr and jump} & jump-and-link\\ \hline
+    \texttt{jalr  \$s} & \texttt{\$ra = addr and jump to \$s} & jump-and-link (address in register)\\ \hline
+    \texttt{jr    \$s} & \texttt{jump to \$s} & jump to address in register\\
+    \hhline{=#=|=}
+    \texttt{la    \$t, addr} & \texttt{\$t = addr} & load literal, direct/indirect address\\ \hline
+    \texttt{lhi   \$t, i} & \texttt{HI(\$t) = i} & load high half-word immediate\\ \hline
+    \texttt{li    \$t, i} & \texttt{\$t = i} & load word immediate\\ \hline
+    \texttt{llo   \$t, i} & \texttt{LO(\$t) = i} & load low half-word immediate\\ \hline
+    \texttt{lb    \$t, i(\$s)} & \texttt{\$t = SE(MEM[\$s+i]:1)} & load byte signed\\ \hline
+    \texttt{lbu   \$t, i(\$s)} & \texttt{\$t = ZE(MEM[\$s+i]:1)} & load byte unsigned\\ \hline
+    \texttt{lh    \$t, i(\$s)} & \texttt{\$t = SE(MEM[\$s+i]:2)} & load half-word signed\\ \hline
+    \texttt{lhu   \$t, i(\$s)} & \texttt{\$t = ZE(MEM[\$s+i]:2)} & load half-word unsigned\\ \hline
+    \texttt{lw    \$t, i(\$s)} & \texttt{\$t = MEM[\$s+i]:4} & load word\\ \hline
+    \texttt{mfhi  \$d} & \texttt{\$d = hi} & move hi-register value\\ \hline
+    \texttt{mflo  \$d} & \texttt{\$d = lo} & move lo-register value\\ \hline
+    \texttt{move  \$d, \$t} & \texttt{\$d = \$t} & copy register to another\\ \hline
+    \texttt{mthi  \$d} & \texttt{hi = \$d} & set hi-register value\\ \hline
+    \texttt{mtlo  \$d} & \texttt{lo = \$d} & set lo-register value\\ \hline
+    \texttt{sb    \$t, i(\$s)} & \texttt{MEM[\$s+i]:1 = LB(\$t)} & store byte\\ \hline
+    \texttt{sh    \$t, i(\$s)} & \texttt{MEM[\$s+i]:2 = LB(\$t)} & store half-word\\ \hline
+    \texttt{sw    \$t, i(\$s)} & \texttt{MEM[\$s+i]:4 = LB(\$t)} & store word\\
+    \hhline{=#=|=}
+    \texttt{nop} & & do absolutely nothing (waste a cycle)\\ \hline
+    \texttt{syscall} & & initiate system routine
+\end{longtable}
+
+\newpage
+\section{A Compiler Case Study: Evaluating Infix Expressions}
+
+In this section we are going to demonstrate a practical and effective example of
+     how to write a compiler that targets Pymips. Our simple example will
+     compile the language of constant integer infix expressions into MIPS
+     instructions that Pymips will use to evaluate a mathematical
+     expression. Hopefully this example should demonstrate how to effectively
+     write an external tool that can be used with the Pymips platform. The goal
+     is not to discuss how the example compiler works, but show how it is used
+     with Pymips.\\
+
+The complete working example program can be found in
+     \textit{simple-math.cpp}. The code is written in C++ and requires a C++
+     compiler that fully supports the C++-11 standard. If the source code was
+     not distributed aloneside this documentation then you can download it from
+     \href{https://raw.githubusercontent.com/RogerGee/pymips/master/doc/simple-math.cpp}{here}.\\
+
+Our compiler program will input source code (which is the infix expression). For
+     the sake of being minimal the compiler will read the source code from its
+     standard input device (in C++ this is abstracted through the \texttt{cin}
+     object). If we wish to read input from a file, we can use the shell to
+     redirect the file to standard input. Otherwise we can enter source code
+     directly on the terminal. We will read input until no more input is
+     available (until end-of-file), storing the source code as a single string
+     object. Our infix expression grammar supports an expression broken across
+     multiple lines so we need to wait until all the input is read, not just a
+     single line.\\
+
+Our compiler program will output MIPS instructions. It will do so on its
+     standard output (via \texttt{cout} in C++). We can use the shell to either
+     write these directly to a file or pass them directly to Pymips (recall that
+     Pymips will read from standard input if no file name is specified when
+     assembling).\\
+
+Before we show this compiler in action, let's talk a little about its
+     implementation. Infix expressions require a well-defined order of
+     operations due to inherent ambiguity in how an expression can be parsed. A
+     properly defined grammar resolves this ambiguity by placing a structure on
+     the input when parsing. Parsing transforms the input into a form from which
+     we can easily create the target representation (in this case, MIPS
+     instructions). For this domain, I have chosen to parse the infix expression
+     into a prefix expression (also known as Polish notation expression). I
+     could have chosen to produce an abstract syntax tree based off the
+     context-free grammar of the source language but instead I use the theory of
+     a pushdown automaton to design a parser that produces a prefix
+     expression.\\
+
+Prefix expressions are unambiguous in that the order of operations is inherent
+     in the structure of the expression. In a prefix expression, the operator
+     appears before its two operands. If an operand itself starts with an
+     operator then we must (out of necessity) evaluate it first. Once the
+     original infix expression has been parsed into a prefix expression, we can
+     apply an intuitive algorithm for code generation. While we won't discuss
+     this algorithm in detail, you can look at its implementation in the source
+     code.\\
+
+The \textit{simple-math} program will output the intermediate prefix expression
+     on its standard error. The actual compiled instructions are output on
+     standard output, and we will only redirect standard output to
+     Pymips. Ultimately this allows us to see the different stages of
+     compilation. Here is a sample run on a simple mathematical expression,
+     $2+2$:\\
+
+\begin{alltt}
+    $ echo '2+2' | ./simple-math
+    + 2 2 
+    .text
+    li $a0, 2
+    li $v0, 2
+    add $a0, $v0, $a0
+    li $v0, 1
+    syscall
+    li $a0, 10
+    li $v0, 11
+    syscall
+    li $v0, 10
+    li $a0, 0
+    syscall
+\end{alltt}
+
+If we pass the program's output to Pymips and use the \texttt{--one-step}
+     option, we see the evaluation of the expression (and notice that the prefix
+     expression is displayed also since standard error writes to the
+     terminal as well):\\
+
+\begin{alltt}
+    $ echo '2+2' | ./simple-math | pymips --one-step
+    + 2 2 
+    4
+\end{alltt}
+
+The program works for more complicated expressions as well, supporting
+     parentheses:
+
+\begin{alltt}
+  $ echo '1+(2+(3+(4+(5+6*7)*44)*33)*22)*11' | ./simple-math 
+    | pymips --one-step
+  + 1 * + 2 * + 3 * + 4 * + 5 * 6 7 44 33 22 11 
+  16547741
+\end{alltt}
+
+Most compilers are implemented in a multistage pipeline. Most of the time, any
+     intermediate representations are discarded after the final product has been
+     produced. What we have demonstrated here is a clean way to design a
+     compiler, where it can write its output directly to the Pymips program. We
+     can have Pymips write an output file or directly execute the program. Here
+     is an example of how to create an executable file:
+
+\begin{alltt}
+    $ echo '2+3*4-10*-5*(100+1-90)' | ./simple-math | pymips -a -oprog
+\end{alltt}
+
+Now we can run the executable like so:\\
+
+\begin{alltt}
+    $ ./prog
+    564
+\end{alltt}
+
+Hopefully this case study has helped you see how to practically design your
+     compiler so that it works well with the Pymips platform.
 
 \end{document}

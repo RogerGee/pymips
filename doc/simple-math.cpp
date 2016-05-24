@@ -5,6 +5,7 @@
 #include <stack>
 #include <deque>
 #include <stdexcept>
+#include <algorithm>
 #include <cctype>
 #include <cassert>
 using namespace std;
@@ -16,7 +17,8 @@ enum marker
     marker_id,
     marker_as,
     marker_md,
-    marker_paren
+    marker_paren,
+    marker_expand
 };
 
 enum token_kind
@@ -46,6 +48,16 @@ static ostream& operator <<(ostream& stream,const token& tok)
 
 typedef deque<token> prefix_expr;
 
+static void print_expr(const prefix_expr& ex)
+{
+    auto cpy(ex);
+    while (!cpy.empty()) {
+        cerr << cpy.front() << ' ';
+        cpy.pop_front();
+    }
+    cerr.put('\n');
+}
+
 class parse_error : public exception
 {
 public:
@@ -53,7 +65,7 @@ public:
     { return "Couldn't parse input string"; }
 };
 
-prefix_expr& collapse(stack<prefix_expr>& exprs)
+static prefix_expr& collapse(stack<prefix_expr>& exprs)
 {
     if (exprs.size() > 1) {
         prefix_expr old = exprs.top();
@@ -63,13 +75,13 @@ prefix_expr& collapse(stack<prefix_expr>& exprs)
     return exprs.top();
 }
 
-prefix_expr& expand(stack<prefix_expr>& exprs)
+static prefix_expr& expand(stack<prefix_expr>& exprs)
 {
     exprs.emplace();
     return exprs.top();
 }
 
-prefix_expr parse(string input)
+static prefix_expr parse(string input)
 {
     int state = 0;
     stack<int> stk;
@@ -156,7 +168,12 @@ prefix_expr parse(string input)
                     // into the previous expression, if any); note the term is
                     // included with the previous expression
                     expr.emplace_back(token_operand,n);
-                    collapse(exprs).emplace_front(token_operator,*it);
+                    if (!stk.empty() && stk.top() == marker_expand) {
+                        collapse(exprs).emplace_front(token_operator,*it);
+                        stk.pop();
+                    }
+                    else
+                        expr.emplace_front(token_operator,*it);
                 }
                 else
                     throw parse_error();
@@ -175,6 +192,7 @@ prefix_expr parse(string input)
                     auto& newexpr = expand(exprs);
                     newexpr.emplace_front(token_operator,*it);
                     newexpr.emplace_back(token_operand,n);
+                    stk.push(marker_expand);
                 }
                 else
                     throw parse_error();
@@ -184,14 +202,24 @@ prefix_expr parse(string input)
             else if (*it == TERMINAL) {
                 // at end of input; include operand in current expression and
                 // transition to accept state
-                expr.emplace_back(token_operand,n);
+                if (!stk.empty() && stk.top() == marker_expand) {
+                    collapse(exprs).emplace_back(token_operand,n);
+                    stk.pop();
+                }
+                else
+                    expr.emplace_back(token_operand,n);
                 if (stk.empty())
                     state = 5;
             }
             else if (*it == ')') {
                 // transition to separate state to handle close parentheses
                 // case; include operand with current expression
-                expr.emplace_back(token_operand,n);
+                if (stk.top() == marker_expand) { // stack should be non-empty
+                    collapse(exprs).emplace_back(token_operand,n);
+                    stk.pop();
+                }
+                else
+                    expr.emplace_back(token_operand,n);
                 state = 4;
             }
             else
@@ -221,13 +249,20 @@ prefix_expr parse(string input)
                 else if (*it == '*' || *it == '/') {
                     if (top == marker_id || top == marker_md)
                         collapse(exprs).emplace_front(token_operator,*it);
-                    else if (top == marker_as)
+                    else if (top == marker_as) {
                         expr.emplace_front(token_operator,*it);
+                        stk.push(marker_expand);
+                    }
                     stk.push(marker_md);
                     state = 0;
                 }
-                else if (*it == ')')
+                else if (*it == ')') {
+                    if (stk.top() == marker_expand) {
+                        collapse(exprs);
+                        stk.pop();
+                    }
                     collapse(exprs);
+                }
                 else if (*it == TERMINAL)
                     state = 5;
                 else
@@ -249,91 +284,138 @@ prefix_expr parse(string input)
     return exprs.top();
 }
 
-void code_gen_recursive(prefix_expr& expr,int state = 0)
+// static void code_gen_recursive(prefix_expr& expr,int state = 0)
+// {
+//     token tok;
+//     static const char* const REGS[] = {
+//         "$a0","$v0", "$v1", "$a1", "$a2", "$a3",
+//         "$t0", "$t1", "$t2", "$t3", "$t4", "$t5",
+//         "$t6", "$t7", "$t8", "$s0", "$s1", "$s2",
+//         "$s3", "$s4", "$s5", "$s6", "$s7"
+//     };
+//
+//     tok = expr.front();
+//     expr.pop_front();
+//
+//     if (tok.kind == token_operator) {
+//         int a, b;
+//         token next = expr.front();
+//         if (next.kind == token_operand) {
+//             // try to search ahead for a deeper nested expression to evaluate;
+//             // this is only a heuristic that on average decreases register usage
+//             a = state+1, b = state;
+//             expr.pop_front();
+//             code_gen_recursive(expr,b);
+//             expr.push_front(next);
+//             code_gen_recursive(expr,a);
+//         }
+//         else {
+//             a = state, b = state+1;
+//             code_gen_recursive(expr,a);
+//             code_gen_recursive(expr,b);
+//         }
+//         if (tok.value == '+') {
+//             cout << "add " << REGS[state] << ", " << REGS[a]
+//                  << ", " << REGS[b] << '\n';
+//         }
+//         else if (tok.value == '-') {
+//             cout << "sub " << REGS[state] << ", " << REGS[a]
+//                  << ", " << REGS[b] << '\n';
+//         }
+//         else if (tok.value == '*') {
+//             cout << "mult " << REGS[a] << ", " << REGS[b]
+//                  << "\nmflo " << REGS[state] << '\n';
+//         }
+//         else if (tok.value == '/') {
+//             cout << "div " << REGS[a] << ", " << REGS[b]
+//                  << "\nmflo " << REGS[state] << '\n';
+//         }
+//     }
+//     else {
+//         cout << "li " << REGS[state] << ", " << tok.value << '\n';
+//     }
+// }
+
+/* note: the algorithm presented here (and the commented-out one above, which
+   also works) is a little naive; depending on how nested the expression is, it
+   will run out of registers to allocate; the solution would be to reuse
+   registers via swapping to/from the stack but for simplicity we do not
+   implement that functionality */
+
+static void code_gen_iterative(prefix_expr& expr)
 {
-    token tok = expr.front();
-    expr.pop_front();
-    if (state == 0) {
-        code_gen_recursive(expr,1);
-        code_gen_recursive(expr,2);
-        if (tok.value == '+')
-            cout << "add $a0, $v0, $v1\n";
-        else if (tok.value == '-')
-            cout << "sub $a0, $v0, $v1\n";
-        else if (tok.value == '*') {
-            cout << "mult $v0, $v1\n"
-                 << "mflo $a0\n";
+    int alloc = 0;
+    stack<token> stk;
+    static const char* const REGS[] = {
+        "$a0","$v0", "$v1", "$a1", "$a2", "$a3",
+        "$t0", "$t1", "$t2", "$t3", "$t4", "$t5",
+        "$t6", "$t7", "$t8", "$s0", "$s1", "$s2",
+        "$s3", "$s4", "$s5", "$s6", "$s7"
+    };
+
+    while (!expr.empty()) {
+        token& tok = expr.back();
+        if (tok.kind == token_operand) {
+            // push operand onto the stack
+            stk.push(tok);
         }
-        else if (tok.value == '/') {
-            cout << "div $v0, $v1\n"
-                 << "mflo $a0\n";
-        }
-    }
-    else if (state == 1) {
-        if (tok.kind == token_operator) {
-            code_gen_recursive(expr,1);
-            code_gen_recursive(expr,2);
-            if (tok.value == '+')
-                cout << "add $v0, $v0, $v1\n";
-            else if (tok.value == '-')
-                cout << "sub $v0, $v0, $v1\n";
+        else { // token_operator
+            // pop off two operands from the stack and allocate registers for
+            // them; the operands could be some combination of literal values or
+            // pre-allocated registers
+            int regs[2];
+            for (int i = 0,j = 0;i < 2;++i) {
+                token& operand = stk.top();
+                if (operand.kind == token_operator/*i.e. register*/)
+                    regs[i] = operand.value;
+                else {
+                    regs[i] = alloc + j++;
+                    cout << "li " << REGS[regs[i]] << ", " << operand.value << '\n';
+                }
+                stk.pop();
+            }
+
+            // since we pop the values off, whatever registers that were in use
+            // can be deallocated; since we allocate them contiguously, then the
+            // next available register is the minimum one of the pair
+            alloc = min(regs[0],regs[1]);
+
+            if (tok.value == '+') {
+                cout << "add " << REGS[alloc] << ", " << REGS[regs[0]]
+                     << ", " << REGS[regs[1]];
+            }
+            else if (tok.value == '-') {
+                cout << "sub " << REGS[alloc] << ", " << REGS[regs[0]]
+                     << ", " << REGS[regs[1]];
+            }
             else if (tok.value == '*') {
-                cout << "mult $v0, $v1\n"
-                     << "mflo $v0\n";
+                cout << "mult " << REGS[regs[0]] << ", " << REGS[regs[1]]
+                     << "\nmflo " << REGS[alloc];
             }
             else if (tok.value == '/') {
-                cout << "div $v0, $v1\n"
-                     << "mflo $v0\n";
+                cout << "div " << REGS[regs[0]] << ", " << REGS[regs[1]]
+                     << "\nmflo " << REGS[alloc];
             }
+            cout.put('\n');
+            stk.push(token(token_operator/*register*/,alloc));
+            alloc += 1;
         }
-        else
-            cout << "li $v0, " << tok.value << '\n';
-    }
-    else if (state == 2) {
-        if (tok.kind == token_operator) {
-            code_gen_recursive(expr,2);
-            code_gen_recursive(expr,3);
-            if (tok.value == '+')
-                cout << "add $v1, $v1, $t0\n";
-            else if (tok.value == '-')
-                cout << "sub $v1, $v1, $t0\n";
-            else if (tok.value == '*') {
-                cout << "mult $v1, $t0\n"
-                     << "mflo $v1\n";
-            }
-            else if (tok.value == '/') {
-                cout << "div $v1, $t0\n"
-                     << "mflo $v1\n";
-            }
-        }
-        else
-            cout << "li $v1, " << tok.value << '\n';
-    }
-    else if (state == 3) {
-        assert(tok.kind == token_operand);
-        cout << "li $t0, " << tok.value << '\n';
+        expr.pop_back();
     }
 }
 
-void code_gen(prefix_expr& expr)
+static void code_gen(prefix_expr& expr)
 {
     // print out the prefix expression on standard error so we can see it
-    auto copy = expr;
-    while (!copy.empty()) {
-        cerr << copy.front() << ' ';
-        copy.pop_front();
-    }
-    cerr.put('\n');
+    print_expr(expr);
 
     // now generate the assembly instructions and write them to standard output
     // so we can pass them to the assembler
     cout << ".text\n";
+    code_gen_iterative(expr);
 
-    if (expr.size() == 1) // special case of no operator
-        cout << "li $a0, " << expr.front() << endl;
-    else
-        code_gen_recursive(expr);
-
+    // print out the answer and add runtime-related code to terminate the
+    // process cleanly
     cout << "li $v0, 1\n"
         "syscall\n"
         "li $a0, 10\n"

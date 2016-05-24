@@ -1,13 +1,13 @@
         .text
 main:   addiu   $sp, $sp, -16   # allocate stack space for arguments to callee
-        
+
         ## read integer to pass to 'fib'
         li  $v0, 5
         syscall
         move    $a0, $v0
 
         ## invoke 'fib' to compute value; then print it out followed
-	    ## by a newline character
+        ## by a newline character
         jal fib
         move    $a0, $v0
         li  $v0, 1
@@ -15,13 +15,13 @@ main:   addiu   $sp, $sp, -16   # allocate stack space for arguments to callee
         li  $a0, 10
         li  $v0, 11
         syscall
-        
+
         ## do exit
         li  $v0, 10
         li  $a0, 0
         syscall
 
-fib:    addiu   $sp, $sp, -24   # allocate stack frame
+fib:    addiu   $sp, $sp, -24   # allocate stack frame; 16 + 8 bytes
         sw  $s0, 16($sp)        # save the save register we use here
         sw  $ra, 20($sp)        # save return address
         slti    $v0, $a0, 2     # check for base case
