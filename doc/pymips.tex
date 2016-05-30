@@ -5,6 +5,7 @@
 \usepackage{hhline,wrapfig,longtable}
 \usepackage{graphicx,listings,mips}
 \usepackage{alltt,multicol,scrextend}
+\usepackage{upquote}
 
 \pagestyle{empty}
 \setlength{\parindent}{0pt}
@@ -104,7 +105,8 @@ To assemble a program from its source assembly instructions, use the
 \end{alltt}
 
 This command assembles \textit{program.s} into the output file
-     \textit{program.mips}.\\
+     \textit{program.mips}. If no input file is specified, Pymips will read from
+     its standard input.\\
 
 To see Pymips in action, let's assemble and simulate a simple program that
      prints \textit{Hello World} to the screen. The listing for \textit{hello.s}
@@ -122,7 +124,7 @@ Pymips should have written no output to the screen, which indicates success. The
      file \texttt{hello.mips} now exists and can be executed. Note that the file
      extension \texttt{.mips} is unnecessary. I use it conventionally to refer
      to an assembled MIPS program file. To execute the file, pass it to Pymips
-     with no arguments. You should see the following output:
+     with no options. You should see the following output:
 
 \begin{alltt}
     $ pymips hello.mips
@@ -232,8 +234,8 @@ Registers are the most basic memory regions in an assembler program. They
 \vspace{0.1in} Some of these registers (e.g. \texttt{\$k0}, \texttt{\$k1}) have
      no special use since Pymips is only a simulator. So you can use them for
      whatever purpose you deem fit. Note that even though a register has a
-     conventional use, you can still disregard it and still have a valid
-     assembly program.
+     conventional use, you can disregard it and still have a valid assembly
+     program.
 
 \subsection{Formatting Instructions}
 
@@ -294,18 +296,18 @@ To make any useful MIPS program, we need to interact with the system
      buffer}; returns the number of bytes read \\ \hline
 \end{tabular}
 
-\begin{tabular}{p{0.15\textwidth} || p{0.025\textwidth} | p{0.275\textwidth} | p{0.45\textwidth}}
+\begin{tabular}{p{0.20\textwidth} || p{0.025\textwidth} | p{0.275\textwidth} | p{0.40\textwidth}}
     \textbf{syscall} & \textbf{no.} & \textbf{arguments} &
      \textbf{description} \\ \hhline{=#=|=|=}
 
-    \textit{exit} & 10 & \texttt{\$a0} - process return code & Terminate the
+    \texttt{exit} & 10 & \texttt{\$a0} - process return code & Terminate the
      process (this should be done at the end of every well-formed program)
      \\ \hline
 
-    \textit{print\_character} & 11 & \texttt{\$a0} - character to print & Print
+    \texttt{print\_character} & 11 & \texttt{\$a0} - character to print & Print
      single character; the argument should be in the range $0..255$ \\ \hline
 
-    \textit{read\_character} & 12 & & returns the next character read from stdin\\
+    \texttt{read\_character} & 12 & & returns the next character read from stdin\\
 \end{tabular}
 
 \vspace{0.25in}
@@ -511,9 +513,9 @@ Figure \ref{fig:stackframe} shows a generic MIPS stack frame according to the C
      is why there is an empty space above \textit{return address} in the stack
      frame diagram; this can represent zero or more words of padding to help
      achieve alignment. Alignment ensures that objects placed on the stack have
-     addresses that are easily computed (e.g. some multiple of a power of two)}
-     (for objects of up to size 64-bits). If your source language only uses data
-     objects that are at most a word size long then you could get away with
+     addresses that are easily computed (e.g. some multiple of a power of two).}
+      (for objects of up to size 64-bits). If your source language only uses
+     data objects that are at most a word size long then you could get away with
      using multiples of four but this guide will show examples that allocate to
      a multiple of eight.\\
 
@@ -666,7 +668,7 @@ Local variables are stack-allocated memory regions used while a procedure is
 
 The stack frame diagram seen previously showed that local variables are stored
      toward the bottom of the stack frame (i.e. furthest away from the value of
-     \texttt{\$sp}. Some compilers I've seen actually put this space between the
+     \texttt{\$sp}). Some compilers I've seen actually put this space between the
      argument space and the save register space. It really doesn't matter as
      long as you're consistent.\\
 
@@ -751,7 +753,8 @@ This runtime support code should always appear at the very beginning of the
      program's text segment. Any compiled code would appear afterwards. Note
      that if the higher-level language only allows execution within procedures
      then the order of the defined procedures in the text segment is not
-     important since we can jump backwards or forwards in assembler.\\
+     important since we can jump backwards or forwards in an assembler
+     program.\\
 
 If you are compiling a relatively unstructured language, then it is sufficient
      to simply inject a call to \texttt{exit} at the end of the program.
@@ -800,6 +803,7 @@ If you are compiling a relatively unstructured language, then it is sufficient
     \texttt{blez  \$s, lbl} & \texttt{if \$s <= 0 goto lbl} & branch less-than-or-equal-to zero\\ \hline
     \texttt{bne   \$s, \$t, lbl} & \texttt{if \$s != \$t goto lbl} & branch not-equal\\ \hline
     \texttt{blt   \$s, \$t, lbl} & \texttt{if \$s < \$t goto lbl} & branch less-than\\
+    \texttt{bgt   \$s, \$t, lbl} & \texttt{if \$s > \$t goto lbl} & branch greater-than\\
     \hhline{=#=|=}
     \texttt{j     lbl} & \texttt{goto lbl} & unconditional jump\\ \hline
     \texttt{jal   lbl} & \texttt{\$ra = addr and jump} & jump-and-link\\ \hline
@@ -886,7 +890,7 @@ Prefix expressions are unambiguous in that the order of operations is inherent
      code.\\
 
 The \textit{simple-math} program will output the intermediate prefix expression
-     on its standard error. The actual compiled instructions are output on
+     on its standard error. The actual compiled instructions are written to
      standard output, and we will only redirect standard output to
      Pymips. Ultimately this allows us to see the different stages of
      compilation. Here is a sample run on a simple mathematical expression,
@@ -949,6 +953,7 @@ Now we can run the executable like so:\\
 \end{alltt}
 
 Hopefully this case study has helped you see how to practically design your
-     compiler so that it works well with the Pymips platform.
+     compiler so that it easily integrates with the Pymips platform from the
+     command-line.
 
 \end{document}

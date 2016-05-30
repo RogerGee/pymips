@@ -79,6 +79,7 @@ from sys import stderr
 #  blez  $s, lbl     | if $s <= 0 goto lbl        | branch less-than-or-equal-to zero
 #  bne   $s, $t, lbl | if $s!=$t goto lbl         | branch not-equal
 #  blt   $s, $t, lbl | if $s < $t goto lbl        | branch less-than
+#  bgt   $s, $t, lbl | if $s > $t goto lbl        | branch greater-than
 #
 #  j     lbl         | goto lbl                   | unconditional jump
 #  jal   lbl         | $ra = addr and jump        | jump-and-link
@@ -392,7 +393,7 @@ def instr_xori(sim,parts,**kwargs):
     if sim is None:
         return check_immed_instr(parts)
     t = sim.read_register(parts[1])
-    u = sim.read_register(parts[2])
+    u = ctypes.c_uint32(parts[2]).value
     sim.write_register(parts[0],ctypes.c_uint32(t ^ u).value)
 
 def instr_slt(sim,parts,**kwargs):
@@ -466,6 +467,14 @@ def instr_blt(sim,parts,**kwargs):
     t = ctypes.c_int32(sim.read_register(parts[0])).value
     u = ctypes.c_int32(sim.read_register(parts[1])).value
     if t < u:
+        sim.progCounter = parts[2]
+
+def instr_bgt(sim,parts,**kwargs):
+    if sim is None:
+        return check_direct_instr2(parts,**kwargs)
+    t = ctypes.c_int32(sim.read_register(parts[0])).value
+    u = ctypes.c_int32(sim.read_register(parts[1])).value
+    if t > u:
         sim.progCounter = parts[2]
 
 def instr_j(sim,parts,**kwargs):
@@ -683,9 +692,9 @@ MIPS_INSTRUCTIONS = {'add':instr_add,'addu':instr_addu,'addi':instr_addi,'addiu'
                      'sra':instr_sra,'srav':instr_srav,'srl':instr_srl,'srlv':instr_srlv,'sub':instr_sub,
                      'subu':instr_subu,'xor':instr_xor,'xori':instr_xori,'slt':instr_slt,
                      'sltu':instr_sltu,'slti':instr_slti,'sltiu':instr_sltiu,'beq':instr_beq,'bgez':instr_bgez,
-                     'bgtz':instr_bgtz,'blez':instr_blez,'bne':instr_bne,'blt':instr_blt,'j':instr_j,'jal':instr_jal,
-                     'jalr':instr_jalr,'jr':instr_jr,'la':instr_la,'lhi':instr_lhi,'li':instr_li,
-                     'llo':instr_llo,'lb':instr_lb,'lbu':instr_lbu,'lh':instr_lh,'lhu':instr_lhu,
+                     'bgtz':instr_bgtz,'blez':instr_blez,'bne':instr_bne,'blt':instr_blt,'bgt':instr_bgt,
+                     'j':instr_j,'jal':instr_jal,'jalr':instr_jalr,'jr':instr_jr,'la':instr_la,'lhi':instr_lhi,
+                     'li':instr_li,'llo':instr_llo,'lb':instr_lb,'lbu':instr_lbu,'lh':instr_lh,'lhu':instr_lhu,
                      'lw':instr_lw,'mfhi':instr_mfhi,'mflo':instr_mflo,'move':instr_move,'mthi':instr_mthi,
                      'mtlo':instr_mtlo,'sb':instr_sb,'sh':instr_sh,'sw':instr_sw,'syscall':instr_syscall,
                      'nop':lambda _,__: True}
@@ -710,7 +719,7 @@ STRING_ESCAPES = ((r'\\a','\x07'),(r'\\b','\x08'),(r'\\f','\x0c'),(r'\\n','\x0a'
                   (r'\\r','\x0d'),(r'\\t','\x09'),(r'\\v','\x0b'),(r'\\\\',r'\x5c'),
                   (r'\\\'','\x27'),(r'\\"','\x22'),(r'\\([0-7]{3})',lambda x:chr(int(x.group(1),8))),
                   (r'\\([0-9a-f]{2})',lambda x:chr(int(x.group(1),16))))
-LABEL_INSTRS = ['beq','bgez','bgtz','blez','bne','blt','j','jal','jalr','jr','la','lb','lbu','lh','lhu',
+LABEL_INSTRS = ['beq','bgez','bgtz','blez','bne','blt','bgt','j','jal','jalr','jr','la','lb','lbu','lh','lhu',
                 'lw','sw','sh','sw'] # only these instructions can resolve labels
 SHEBANG = "#!/usr/bin/env pymips\n"
 
