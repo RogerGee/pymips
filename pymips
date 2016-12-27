@@ -697,7 +697,7 @@ MIPS_INSTRUCTIONS = {'add':instr_add,'addu':instr_addu,'addi':instr_addi,'addiu'
                      'li':instr_li,'llo':instr_llo,'lb':instr_lb,'lbu':instr_lbu,'lh':instr_lh,'lhu':instr_lhu,
                      'lw':instr_lw,'mfhi':instr_mfhi,'mflo':instr_mflo,'move':instr_move,'mthi':instr_mthi,
                      'mtlo':instr_mtlo,'sb':instr_sb,'sh':instr_sh,'sw':instr_sw,'syscall':instr_syscall,
-                     'nop':lambda _,__: True}
+                     'nop':lambda _,__,**___: True}
 MIPS_REGISTERS = {'$0' : 0, '$zero' : 0, '$r0' : 0,
                   '$1' : 4,'$at' : 4, '$2' : 8, '$v0' : 8,
                   '$3' : 12,'$v1' : 12, '$4' : 16, '$a0' : 16,
