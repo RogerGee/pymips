@@ -1,5 +1,5 @@
 Package: pymips
-Version: 1.0
+Version: 1.0.1
 Maintainer: Roger Gee <rpg11a@acu.edu>
 Description: A MIPS platform assembler/simulator
 Architecture: amd64
