@@ -781,6 +781,7 @@ If you are compiling a relatively unstructured language, then it is sufficient
     \texttt{nor   \$d, \$s, \$t} & \texttt{\$d = ~(\$s \& \$t)} & bit-not-or\\ \hline
     \texttt{or    \$d, \$s, \$t} & \texttt{\$d = \$s \& \$t} & bit-or\\ \hline
     \texttt{ori   \$d, \$s, i} & \texttt{\$d = \$s \& ZE(i)} & bit-or, immediate\\ \hline
+    \texttt{rem   \$d, \$s, a} & \texttt{\$d = \$s \% a} & remainder (by variable or constant)\\ \hline
     \texttt{sll   \$d, \$s, a} & \texttt{\$d = \$s << a} & left-shift (by variable or constant)\\ \hline
     \texttt{sllv  \$d, \$s, \$t} & \texttt{\$d = \$s << \$t} & same as \texttt{sll}\\ \hline
     \texttt{sra   \$d, \$s, a} & \texttt{\$d = \$s >> a  with sign-ex} & arithmetic right-shift (by variable or constant)\\ \hline

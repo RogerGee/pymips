@@ -27,6 +27,16 @@ newl:   .asciiz "\n"
         mfhi    $t2
         sw      $t2, 16($t4)
 
+        li      $t5, 17
+        li      $t6, 5
+        rem     $t7, $t5, $t6
+        li      $v0, 1
+        move    $a0, $t7
+        syscall
+        li      $v0, 4
+        la      $a0, newl
+        syscall
+
         li      $t0, 8
 top:    
         lw      $a0, ($t4)

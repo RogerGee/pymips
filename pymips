@@ -57,6 +57,7 @@ from sys import stderr
 #  nor   $d, $s, $t  | $d = ~($s | $t)            | bit-not-or
 #  or    $d, $s, $t  | $d = $s | $t               | bit-or
 #  ori   $d, $s, i   | $d = $s | ZE(i)            | bit-or, immediate
+#  rem   $d, $s, a   | $d = $s % $t               | remainder (by variable or constant)
 #  sll   $d, $s, a   | $d = $s << a               | left-shift (by variable or constant)
 #  sllv  $d, $s, $t  | $d = $s << $t              | same as 'sll'
 #  sra   $d, $s, a   | $d = $s >> a  with sign-ex | arithmetic right-shift (by variable or constant)
@@ -311,6 +312,14 @@ def instr_ori(sim,parts,**kwargs):
         return check_immed_instr(parts)
     t = sim.read_register(parts[1])
     sim.write_register(parts[0],ctypes.c_uint32(t | parts[2]).value)
+
+def instr_rem(sim,parts,**kwargs):
+    if sim is None:
+        return check_register_instr(parts) or check_immed_instr(parts)
+    # Read operands: the right operand may be a register or an immediate.
+    t = sim.read_register(parts[1])
+    u = sim.read_register(parts[2]) if parts[2] in MIPS_REGISTERS else parts[2]
+    sim.write_register(parts[0],ctypes.c_uint32(t % u).value)
 
 def instr_sll(sim,parts,**kwargs):
     if sim is None:
@@ -697,7 +706,7 @@ MIPS_INSTRUCTIONS = {'add':instr_add,'addu':instr_addu,'addi':instr_addi,'addiu'
                      'li':instr_li,'llo':instr_llo,'lb':instr_lb,'lbu':instr_lbu,'lh':instr_lh,'lhu':instr_lhu,
                      'lw':instr_lw,'mfhi':instr_mfhi,'mflo':instr_mflo,'move':instr_move,'mthi':instr_mthi,
                      'mtlo':instr_mtlo,'sb':instr_sb,'sh':instr_sh,'sw':instr_sw,'syscall':instr_syscall,
-                     'nop':lambda _,__,**___: True}
+                     'rem':instr_rem,'nop':lambda _,__,**___: True}
 MIPS_REGISTERS = {'$0' : 0, '$zero' : 0, '$r0' : 0,
                   '$1' : 4,'$at' : 4, '$2' : 8, '$v0' : 8,
                   '$3' : 12,'$v1' : 12, '$4' : 16, '$a0' : 16,
