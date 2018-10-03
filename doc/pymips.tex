@@ -51,30 +51,36 @@ Pymips is a Python program and requires Python unless you install the frozen
      version of Pymips. Ideally it should run as a command-line program that can
      be executed by your shell. This means the relevant files should be
      installed in a location defined in the shell's PATH environment
-     variable. On Linux-based systems this may be a location like
+     variable. On POSIX systems this may be a location like
      \texttt{/usr/local/bin}. On Windows you may need to create a directory for
      the program that you add to the shell's \texttt{PATH} environment
      variable. Consult your operating system vendor for the appropriate
      documentation.\\
 
-Now you should be able to run the program from your shell like so:
+On POSIX systems, rename \texttt{pymips.py} to \texttt{pymips} when installing
+     and ensure the file has executable bits enabled. Note that we do this since
+     every invocation example presented in this document will assume the program
+     is called \texttt{pymips}.\\
+
+On Windows it is recommended that you install the frozen version so that it can
+     be executed more easily as if it were a native binary. If you don't, you
+     can execute the \texttt{pymips.py} file directly assuming your Python
+     installation has registered \textit{.py} files with the interpreter. This
+     allows the shell to launch Python scripts like native binaries.\\
+
+Once you've successfully installed Pymips, you should be able to run the program
+     from your shell like so:
 
 \begin{alltt}
     $ pymips ...
 \end{alltt}
 
-On Windows it is recommended that you install the frozen version so that it can
-     be executed more easily as if it were a native binary. If you don't, you
-     may rename the script \texttt{pymips} to \texttt{pymips.py}. Hopefully your
-     Python installation has registered \textit{.py} files with the interpreter
-     so the shell can launch them.\\
-
-You can always run the script directly like so:
+Alternatively, you can also run the program directly like so:
 
 \begin{alltt}
-    $ python pymips
-        OR (on linux-based systems)
-    $ ./pymips
+    $ python pymips.py
+        OR (on POSIX systems)
+    $ ./pymips.py
 \end{alltt}
 
 \textit{But} this becomes burdensome if you work on multiple projects using
@@ -132,8 +138,8 @@ Pymips should have written no output to the screen, which indicates success. The
     pymips: error: attempted to execute non-instruction: bad offset in program
 \end{alltt}
 
-If you are using a Linux-based platform, Pymips will turn on the executable bits
-     of the output file's mode. This means you can execute it like any other
+If you are using a POSIX platform, Pymips will turn on the executable bits of
+     the output file's mode. This means you can execute it like any other
      program. This works since Pymips writes a \textit{shebang} into the output
      file that can invoke Pymips. For example:
 

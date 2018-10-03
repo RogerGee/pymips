@@ -6,16 +6,18 @@ of the MIPS instruction set (pretty much everything except floating-point
 arithmetic). The program functionally operates either as an assembler, simulator
 or both in one step. On *nix systems assembled programs can be executed as if
 they were native binaries (but they aren't really).
+
 --------------------------------------------------------------------------------
 Installation:
 
  -  *nix systems  -
 
-To install pymips, copy the source file 'pymips' to a directory referenced by
-the PATH environment variable of your shell. Make sure the file is marked
-executable (it should be if you clone this repository).
+To install pymips, copy the source file 'pymips.py' to a directory referenced by
+the PATH environment variable of your shell. Name the copied file 'pymips'. Make
+sure the file is marked executable (it should be if you clone this repository).
 
-Now you should be able to execute pymips:
+Now you should be able to execute pymips directly and execute compiled pymips
+programs. For example:
 
     $ pymips
     pymips: error: no input program file
@@ -28,13 +30,14 @@ Win32 release and place it somewhere in your path. It should run as a standalone
 binary executable.
 
 Alternatively, if you have Python installed and depending on your Python
-installation, you may be able to simply rename 'pymips' to 'pymips.py' and place
-in your shell's PATH somewhere.
+installation, you may be able to simply place 'pymips.py' in your shell's PATH
+somewhere.
 
 Now you should be able to execute pymips:
 
     > pymips
     pymips: error: no input program file
+
 --------------------------------------------------------------------------------
 Documentation:
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-# pymips
+
+# pymips.py
+
 import re
 import io
 import os
