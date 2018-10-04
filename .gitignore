@@ -1,3 +1,11 @@
 simple-math
-/DEBIAN/usr/
-dist/
+/dist/
+/build/
+pymips
+doc/missfont.log
+
+*.aux
+*.log
+*.out
+*.pdf
+*.toc

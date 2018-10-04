@@ -525,7 +525,6 @@ Figure \ref{fig:stackframe} shows a generic MIPS stack frame according to the C
      using multiples of four but this guide will show examples that allocate to
      a multiple of eight.\\
 
-\newpage
 \begin{wrapfigure}{r}{0.55\textwidth}
 \centering
 \includegraphics{stack-frame.png}
@@ -579,7 +578,6 @@ A procedure should store its return value in the register \texttt{\$v0}. If you
      you would need to allocate space in the caller's stack frame (this exceeds
      the scope of this guide).
 
-\newpage
 \subsubsection{Save Registers}
 \label{sec:saveregs}
 
@@ -631,6 +629,7 @@ Here is a practical example. Consider the following C program that recursively
      implied by the source code denote direct system calls and not procedure
      calls):\\
 
+\newpage
 \begin{lstlisting}[language=C]
 int fib(int n)
 {
@@ -658,6 +657,11 @@ Each call to \texttt{fib} will allocate 24 bytes on the stack since we must
      address and save registers (this procedure uses no local variables). The
      argument stack space will be used by \textit{both} the first and second
      recursive calls.\\
+
+\newpage
+
+The following listing contains a complete MIPS implementation that computes the
+     $N^{th}$ Fibonacci term as denoted by the previous C program:\\
 
 \lstinputlisting[title={{\lstname} - Computing a Fibonacci term}]{fib.s}
 
